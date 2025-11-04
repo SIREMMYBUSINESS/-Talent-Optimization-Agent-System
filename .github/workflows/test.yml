@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  test:
+    name: Lint, Migrate & Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: talentdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=2s --health-retries=10
+    env:
+      # ensure integrations run in mock mode during CI and audit writes to runner temp dir
+      NEMO_BASE_URL: ""
+      WORKDAY_BASE_URL: ""
+      AUDIT_LOG_PATH: ${{ runner.temp }}/talent_optimization_agent_ci_audit.log
+      # point DATABASE_URL to the service container
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/talentdb
+      AUTH0_DOMAIN: ""
+      AUTH0_AUDIENCE: ""
+      AUTH_JWT_SECRET: "test-secret"
+      AUTH_JWT_ALGORITHM: "HS256"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov ruff alembic
+
+      - name: Wait for Postgres to be ready
+        run: |
+          for i in $(seq 1 30); do
+            nc -z localhost 5432 && break
+            echo "waiting for postgres... ($i)"
+            sleep 1
+          done
+
+      - name: Run alembic migrations against CI Postgres
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/talentdb
+        run: |
+          alembic upgrade head
+
+      - name: Lint with ruff
+        run: |
+          ruff check src tests
+
+      - name: Run tests
+        run: |
+          pytest -q
