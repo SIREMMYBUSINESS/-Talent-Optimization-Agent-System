@@ -1,0 +1,26 @@
+# Minimal production-ready image for the Talent Optimization Agent
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+# Install minimal system deps required by python-docx and pdf processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libxml2 \
+    libxslt1.1 \
+    gnupg2 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy source
+COPY src /app/src
+
+# Ensure log directory exists
+RUN mkdir -p /var/log/talent_optimization_agent
+ENV AUDIT_LOG_PATH=/var/log/talent_optimization_agent/audit.log
+
+EXPOSE 8000
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--limit-concurrency", "100", "--timeout-keep-alive", "10"]
