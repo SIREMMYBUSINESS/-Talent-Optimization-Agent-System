@@ -1,0 +1,17 @@
+Stream live audit logs via SSE with JWT-based access control Provide a responsive admin dashboard for monitoring and insights Enforce rate limits and connection caps using Redis Integrate with Auth0 for secure authentication Harden CI/CD pipelines with Alembic migration retries Export metrics for observability via Prometheus or OpenTelemetry
+This text outlines the core capabilities of the Talent Optimization Agent System, a modular backend and frontend architecture designed for secure, scalable, and observable talent workflow management. Based on the surrounding GitHub page content, here's a breakdown of each feature in context:
+
+🔐 Security & Access Control
+Stream live audit logs via SSE with JWT-based access control The system uses Server-Sent Events (SSE) to stream real-time audit logs, gated by JSON Web Tokens (JWT) for secure, tenant-aware access. This ensures only authenticated users can monitor sensitive activity.
+
+Integrate with Auth0 for secure authentication Auth0 handles user identity and access management, using JWT + JWKS for token validation. This supports multi-tenant isolation and secure login flows across the admin dashboard.
+
+📊 Monitoring & Observability
+Provide a responsive admin dashboard for monitoring and insights The frontend—built with React, Vite, Tailwind CSS, and Zustand—offers a dynamic dashboard for viewing live logs, user activity, and system metrics.
+
+Export metrics for observability via Prometheus or OpenTelemetry The backend exposes metrics that can be scraped by Prometheus or streamed via OpenTelemetry, enabling real-time system health tracking and performance analysis.
+
+🚦 Rate Limiting & Resilience
+Enforce rate limits and connection caps using Redis Redis is used to track active connections and apply rate limits, preventing abuse and ensuring fair resource allocation across tenants.
+
+Harden CI/CD pipelines with Alembic migration retries Alembic handles database migrations, and the system includes retry logic to ensure migrations complete reliably during CI/CD deployments—especially useful in cloud-native or containerized environments
