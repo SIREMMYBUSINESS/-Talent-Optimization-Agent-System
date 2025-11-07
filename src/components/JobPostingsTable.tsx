@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { formatDate, getStatusColor } from '../utils/formatters';
 
 interface JobPosting {
@@ -14,6 +15,12 @@ interface JobPostingsTableProps {
 }
 
 export function JobPostingsTable({ jobs }: JobPostingsTableProps) {
+  const navigate = useNavigate();
+
+  const handleRowClick = (jobId: string) => {
+    navigate(`/jobs/${jobId}`);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200">
@@ -42,7 +49,11 @@ export function JobPostingsTable({ jobs }: JobPostingsTableProps) {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {jobs.map((job) => (
-              <tr key={job.id} className="hover:bg-gray-50 cursor-pointer">
+              <tr
+                key={job.id}
+                onClick={() => handleRowClick(job.id)}
+                className="hover:bg-gray-50 cursor-pointer transition-colors"
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{job.title}</div>
                 </td>

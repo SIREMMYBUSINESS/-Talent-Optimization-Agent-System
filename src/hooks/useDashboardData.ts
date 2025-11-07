@@ -132,3 +132,80 @@ export const useDashboardMetrics = () => {
     refetchInterval: 30000,
   });
 };
+
+export const useJobDetails = (jobId: string) => {
+  return useQuery({
+    queryKey: ['job-details', jobId],
+    queryFn: async () => {
+      const { data: job, error: jobError } = await supabase
+        .from('job_postings')
+        .select('*')
+        .eq('id', jobId)
+        .maybeSingle();
+
+      if (jobError) throw jobError;
+      if (!job) throw new Error('Job not found');
+
+      const { data: applicationsData, error: applicationsError } = await supabase
+        .from('applications')
+        .select(`
+          id,
+          status,
+          applied_at,
+          notes,
+          candidates (
+            id,
+            full_name,
+            email,
+            phone,
+            resume_url,
+            linkedin_url,
+            skills,
+            experience_years
+          ),
+          screening_results (
+            id,
+            overall_score,
+            recommendation,
+            skills_match,
+            bias_flags,
+            screened_at
+          )
+        `)
+        .eq('job_posting_id', jobId)
+        .order('applied_at', { ascending: false });
+
+      if (applicationsError) throw applicationsError;
+
+      return {
+        job,
+        applicants: applicationsData?.map((app: any) => ({
+          applicationId: app.id,
+          status: app.status,
+          appliedAt: app.applied_at,
+          notes: app.notes,
+          candidate: {
+            id: app.candidates?.id,
+            fullName: app.candidates?.full_name,
+            email: app.candidates?.email,
+            phone: app.candidates?.phone,
+            resumeUrl: app.candidates?.resume_url,
+            linkedinUrl: app.candidates?.linkedin_url,
+            skills: app.candidates?.skills || [],
+            experienceYears: app.candidates?.experience_years || 0,
+          },
+          screening: app.screening_results ? {
+            id: app.screening_results.id,
+            overallScore: app.screening_results.overall_score,
+            recommendation: app.screening_results.recommendation,
+            skillsMatch: app.screening_results.skills_match,
+            biasFlags: app.screening_results.bias_flags || [],
+            screenedAt: app.screening_results.screened_at,
+          } : null,
+        })) || [],
+      };
+    },
+    enabled: !!jobId,
+    refetchInterval: 30000,
+  });
+};
