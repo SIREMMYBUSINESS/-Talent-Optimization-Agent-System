@@ -1,10 +1,28 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { DashboardLayout } from '../layouts/DashboardLayout';
+import { MetricsCard } from '../components/MetricsCard';
+import { PipelineChart } from '../components/PipelineChart';
+import { JobPostingsTable } from '../components/JobPostingsTable';
+import { ScreeningInsights } from '../components/ScreeningInsights';
+import { AuditLogStream } from '../components/AuditLogStream';
+import {
+  useDashboardMetrics,
+  useCandidatePipeline,
+  useJobPostings,
+  useScreeningResults,
+} from '../hooks/useDashboardData';
+import { formatNumber } from '../utils/formatters';
 
 function Dashboard() {
-  const { user, signOut } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
+
+  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
+  const { data: pipeline, isLoading: pipelineLoading } = useCandidatePipeline();
+  const { data: jobs, isLoading: jobsLoading } = useJobPostings();
+  const { data: screeningResults, isLoading: screeningLoading } = useScreeningResults(10);
 
   useEffect(() => {
     if (!user) {
@@ -12,38 +30,59 @@ function Dashboard() {
     }
   }, [user, navigate]);
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
-  };
-
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">Talent Optimization Dashboard</h1>
-          <button
-            onClick={handleSignOut}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-          >
-            Sign Out
-          </button>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricsCard
+            title="Total Candidates"
+            value={metricsLoading ? '...' : formatNumber(metrics?.totalCandidates || 0)}
+            change={5.2}
+            trend="up"
+            subtitle="vs last month"
+          />
+          <MetricsCard
+            title="Active Applications"
+            value={metricsLoading ? '...' : formatNumber(metrics?.totalApplications || 0)}
+            change={12.8}
+            trend="up"
+            subtitle="in review pipeline"
+          />
+          <MetricsCard
+            title="Open Positions"
+            value={metricsLoading ? '...' : formatNumber(metrics?.activeJobs || 0)}
+            change={-3.1}
+            trend="down"
+            subtitle="currently hiring"
+          />
+          <MetricsCard
+            title="Avg Screening Score"
+            value={metricsLoading ? '...' : `${metrics?.avgScreeningScore || 0}%`}
+            change={7.5}
+            trend="up"
+            subtitle="quality of matches"
+          />
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Welcome, {user.email || user.phone}!
-          </h2>
-          <p className="text-gray-600">
-            Live audit logs and team insights will appear here.
-          </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {!pipelineLoading && pipeline && <PipelineChart data={pipeline} />}
+          {!screeningLoading && screeningResults && (
+            <ScreeningInsights results={screeningResults.slice(0, 5)} />
+          )}
         </div>
-      </main>
-    </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            {!jobsLoading && jobs && <JobPostingsTable jobs={jobs} />}
+          </div>
+          <div>
+            <AuditLogStream />
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }
 
