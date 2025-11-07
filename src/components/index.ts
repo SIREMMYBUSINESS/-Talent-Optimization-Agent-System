@@ -8,4 +8,3 @@ export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
 export { StatsOverview } from './StatsOverview';
 export { CandidateCard } from './CandidateCard';
-export { ProtectedRoute } from './ProtectedRoute';
