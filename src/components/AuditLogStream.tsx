@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { formatDateTime } from '../utils/formatters';
 
 interface AuditEvent {
@@ -14,28 +15,66 @@ export function AuditLogStream() {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const eventSource = new EventSource('/admin/audit-logs/stream');
+    let mounted = true;
 
-    eventSource.onopen = () => {
-      setIsConnected(true);
-    };
-
-    eventSource.onmessage = (event) => {
+    const fetchInitialLogs = async () => {
       try {
-        const data = JSON.parse(event.data);
-        setEvents((prev) => [data, ...prev].slice(0, 50));
+        const { data, error } = await supabase
+          .from('audit_logs')
+          .select('id, created_at, action, user_id, metadata')
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (error) throw error;
+
+        if (mounted && data) {
+          const formattedEvents = data.map((log) => ({
+            id: log.id,
+            timestamp: log.created_at,
+            event_type: log.action,
+            user_id: log.user_id || 'system',
+            payload: log.metadata || {},
+          }));
+          setEvents(formattedEvents);
+        }
       } catch (error) {
-        console.error('Failed to parse audit event:', error);
+        console.error('Failed to fetch initial audit logs:', error);
       }
     };
 
-    eventSource.onerror = () => {
-      setIsConnected(false);
-      eventSource.close();
-    };
+    fetchInitialLogs();
+
+    const channel = supabase
+      .channel('audit_logs_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'audit_logs',
+        },
+        (payload) => {
+          if (mounted) {
+            const newEvent = {
+              id: payload.new.id,
+              timestamp: payload.new.created_at,
+              event_type: payload.new.action,
+              user_id: payload.new.user_id || 'system',
+              payload: payload.new.metadata || {},
+            };
+            setEvents((prev) => [newEvent, ...prev].slice(0, 50));
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (mounted) {
+          setIsConnected(status === 'SUBSCRIBED');
+        }
+      });
 
     return () => {
-      eventSource.close();
+      mounted = false;
+      supabase.removeChannel(channel);
     };
   }, []);
 
