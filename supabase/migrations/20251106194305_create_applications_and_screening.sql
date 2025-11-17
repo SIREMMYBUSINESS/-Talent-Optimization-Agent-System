@@ -215,7 +215,8 @@ CREATE POLICY "HR staff can update screening results"
   );
 
 -- Create indexes
-CREATE INDEX IF NOT EXISTS idx_applications_job_posting ON applications(job_posting_id);
+CREATE INDEX IF NOT EXISTS idx_applications_job_candidate
+  ON applications (job_posting_id, candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 CREATE INDEX IF NOT EXISTS idx_screening_results_score ON screening_results(overall_score DESC);
