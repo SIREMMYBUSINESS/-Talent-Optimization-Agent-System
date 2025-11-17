@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthService } from "../services/auth.service";
-import { useAuthStore } from "../store/authStore";
 
 type LoginMethod = "email" | "phone";
 
@@ -11,7 +10,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const { login } = useAuthStore();
 
   const handleChange = (field: string, value: string) => {
     setCredentials((prev) => ({ ...prev, [field]: value }));
@@ -24,6 +22,7 @@ export default function Login() {
 
     try {
       let user;
+
       if (method === "email") {
         if (!credentials.email) {
           setError("Email is required");
@@ -44,10 +43,7 @@ export default function Login() {
         });
       }
 
-      // ✅ Save auth state with role
-      login(user.role);
-
-      // ✅ Role-based redirect
+      // 🚀 Redirect based on role
       switch (user.role) {
         case "hr_manager":
           navigate("/dashboard/candidates");
@@ -64,6 +60,7 @@ export default function Login() {
         default:
           navigate("/dashboard/overview");
       }
+
     } catch (err: any) {
       setError(err.message || "Invalid credentials");
     } finally {
@@ -76,7 +73,6 @@ export default function Login() {
       <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Sign In</h2>
 
-        {/* Toggle login method */}
         <div className="flex gap-2 mb-6">
           {["email", "phone"].map((m) => (
             <button
@@ -94,7 +90,6 @@ export default function Login() {
           ))}
         </div>
 
-        {/* Form */}
         <form onSubmit={handleLogin} className="space-y-4">
           {method === "email" && (
             <div>
