@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Line } from "react-chartjs-2";
 import { getBiasInsights } from "../services/api";
 import { BiasInsights } from "../types/bias";  // <-- import shared type
-
+import Modal from "../components/Modal";
 export default function BiasInsightsPanel() {
   const [insights, setInsights] = useState<BiasInsights | null>(null);
 
