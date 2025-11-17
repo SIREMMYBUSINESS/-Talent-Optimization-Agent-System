@@ -1,15 +1,22 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthService } from "../services/auth.service";
+import { useAuthStore } from "../store/authStore";
 
 type LoginMethod = "email" | "phone";
 
 export default function Login() {
   const [method, setMethod] = useState<LoginMethod>("email");
-  const [credentials, setCredentials] = useState({ email: "", phone: "", password: "" });
+  const [credentials, setCredentials] = useState({
+    email: "",
+    phone: "",
+    password: "",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
   const navigate = useNavigate();
+  const login = useAuthStore((state) => state.login);
 
   const handleChange = (field: string, value: string) => {
     setCredentials((prev) => ({ ...prev, [field]: value }));
@@ -23,45 +30,66 @@ export default function Login() {
     try {
       let user;
 
+      // --------------------------
+      // LOGIN VIA EMAIL
+      // --------------------------
       if (method === "email") {
         if (!credentials.email) {
           setError("Email is required");
           return;
         }
+
         user = await AuthService.signInWithEmail({
-          email: credentials.email,
+          email: credentials.email.trim(),
           password: credentials.password,
         });
-      } else {
+      }
+
+      // --------------------------
+      // LOGIN VIA PHONE
+      // --------------------------
+      else {
         if (!credentials.phone) {
           setError("Phone number is required");
           return;
         }
+
         user = await AuthService.signInWithPhone({
-          phone: credentials.phone,
+          phone: credentials.phone.trim(),
           password: credentials.password,
         });
       }
 
-      // 🚀 Redirect based on role
+      // --------------------------------
+      // SAVE USER IN AUTH STORE
+      // --------------------------------
+      login(user); // 👈 passes full user object (id, phone/email, role)
+
+      // --------------------------------
+      // ROLE-BASED REDIRECT
+      // --------------------------------
       switch (user.role) {
         case "hr_manager":
-          navigate("/dashboard/candidates");
+          navigate("/dashboard");
           break;
-        case "compliance":
-          navigate("/dashboard/compliance");
-          break;
-        case "recruiter":
-          navigate("/dashboard/jobs");
-          break;
-        case "admin":
-          navigate("/dashboard/overview");
-          break;
-        default:
-          navigate("/dashboard/overview");
-      }
 
+        case "recruiter":
+          navigate("/dashboard");
+          break;
+
+        case "compliance":
+          navigate("/compliance-dashboard");
+          break;
+
+        case "admin":
+          navigate("/dashboard");
+          break;
+
+        default:
+          navigate("/dashboard");
+      }
     } catch (err: any) {
+      console.error("Login error:", err);
       setError(err.message || "Invalid credentials");
     } finally {
       setLoading(false);
@@ -73,6 +101,7 @@ export default function Login() {
       <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Sign In</h2>
 
+        {/* Toggle Email / Phone */}
         <div className="flex gap-2 mb-6">
           {["email", "phone"].map((m) => (
             <button
@@ -85,12 +114,14 @@ export default function Login() {
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
-              {m.charAt(0).toUpperCase() + m.slice(1)}
+              {m === "email" ? "Email" : "Phone"}
             </button>
           ))}
         </div>
 
+        {/* LOGIN FORM */}
         <form onSubmit={handleLogin} className="space-y-4">
+          {/* EMAIL INPUT */}
           {method === "email" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -106,6 +137,7 @@ export default function Login() {
             </div>
           )}
 
+          {/* PHONE INPUT */}
           {method === "phone" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -121,6 +153,7 @@ export default function Login() {
             </div>
           )}
 
+          {/* PASSWORD */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Password
@@ -134,8 +167,10 @@ export default function Login() {
             />
           </div>
 
+          {/* ERROR MESSAGE */}
           {error && <p className="text-sm text-red-600">{error}</p>}
 
+          {/* SUBMIT */}
           <button
             type="submit"
             disabled={loading}
@@ -145,6 +180,7 @@ export default function Login() {
           </button>
         </form>
 
+        {/* SIGNUP LINK */}
         <p className="mt-4 text-center text-sm text-gray-600">
           Don’t have an account?{" "}
           <Link to="/signup" className="text-blue-600 hover:text-blue-800 font-medium">
