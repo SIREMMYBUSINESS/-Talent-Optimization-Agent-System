@@ -1,38 +1,38 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { DashboardLayout } from "../layouts/DashboardLayout";
-import { MetricsCard } from "../components/MetricsCard";
-import { PipelineChart } from "../components/PipelineChart";
-import { JobPostingsTable } from "../components/JobPostingsTable";
-import { ScreeningInsights } from "../components/ScreeningInsights";
-import { AuditLogStream } from "../components/AuditLogStream";
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
 
-import { useAuthStore } from "../store/authStore";
+import { DashboardLayout } from '../layouts/DashboardLayout';
+import { MetricsCard } from '../components/MetricsCard';
+import { PipelineChart } from '../components/PipelineChart';
+import { JobPostingsTable } from '../components/JobPostingsTable';
+import { ScreeningInsights } from '../components/ScreeningInsights';
+import { AuditLogStream } from '../components/AuditLogStream';
+
 import {
   useDashboardMetrics,
   useCandidatePipeline,
   useJobPostings,
   useScreeningResults,
-} from "../hooks/useDashboardData";
-import { formatNumber } from "../utils/formatters";
+} from '../hooks/useDashboardData';
 
-export default function Dashboard() {
+import { formatNumber } from '../utils/formatters';
+
+function Dashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
-  // -----------------------------
-  // React Query hooks
-  // -----------------------------
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
   const { data: pipeline, isLoading: pipelineLoading } = useCandidatePipeline();
   const { data: jobs, isLoading: jobsLoading } = useJobPostings();
-  const { data: screeningResults, isLoading: screeningLoading } = useScreeningResults(10);
+  const { data: screeningResults, isLoading: screeningLoading } =
+    useScreeningResults(10);
 
-  // -----------------------------
-  // Redirect if not logged in
-  // -----------------------------
+  // Redirect unauthenticated users
   useEffect(() => {
-    if (!user) navigate("/");
+    if (!user) {
+      navigate('/', { replace: true });
+    }
   }, [user, navigate]);
 
   if (!user) return null;
@@ -40,63 +40,69 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* --------------------- */}
-        {/* Metrics Cards */}
-        {/* --------------------- */}
+
+        {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricsCard
             title="Total Candidates"
-            value={metricsLoading ? "..." : formatNumber(metrics?.totalCandidates || 0)}
+            value={metricsLoading ? '...' : formatNumber(metrics?.totalCandidates ?? 0)}
             change={5.2}
             trend="up"
             subtitle="vs last month"
           />
+
           <MetricsCard
             title="Active Applications"
-            value={metricsLoading ? "..." : formatNumber(metrics?.totalApplications || 0)}
+            value={metricsLoading ? '...' : formatNumber(metrics?.totalApplications ?? 0)}
             change={12.8}
             trend="up"
             subtitle="in review pipeline"
           />
+
           <MetricsCard
             title="Open Positions"
-            value={metricsLoading ? "..." : formatNumber(metrics?.activeJobs || 0)}
+            value={metricsLoading ? '...' : formatNumber(metrics?.activeJobs ?? 0)}
             change={-3.1}
             trend="down"
             subtitle="currently hiring"
           />
+
           <MetricsCard
             title="Avg Screening Score"
-            value={metricsLoading ? "..." : `${metrics?.avgScreeningScore || 0}%`}
+            value={
+              metricsLoading ? '...' : `${metrics?.avgScreeningScore ?? 0}%`
+            }
             change={7.5}
             trend="up"
             subtitle="quality of matches"
           />
         </div>
 
-        {/* --------------------- */}
-        {/* Candidate Pipeline & Screening Insights */}
-        {/* --------------------- */}
+        {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {!pipelineLoading && pipeline && <PipelineChart data={pipeline} />}
+          {!pipelineLoading && pipeline && (
+            <PipelineChart data={pipeline} />
+          )}
+
           {!screeningLoading && screeningResults && (
             <ScreeningInsights results={screeningResults.slice(0, 5)} />
           )}
         </div>
 
-        {/* --------------------- */}
-        {/* Jobs Table & Audit Logs */}
-        {/* --------------------- */}
+        {/* Jobs + Audit Logs */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             {!jobsLoading && jobs && <JobPostingsTable jobs={jobs} />}
-            {jobsLoading && <div>Loading jobs...</div>}
           </div>
+
           <div>
             <AuditLogStream />
           </div>
         </div>
+
       </div>
     </DashboardLayout>
   );
 }
+
+export default Dashboard;
