@@ -1,5 +1,7 @@
 import { formatDateTime, getStatusColor } from '../utils/formatters';
 import Modal from "../components/Modal"
+export function CandidateCard({ status, appliedAt, notes, candidate, screening }: CandidateCardProps) {
+  const [showModal, setShowModal] = useState(false);
 interface Candidate {
   id: string;
   fullName: string;
