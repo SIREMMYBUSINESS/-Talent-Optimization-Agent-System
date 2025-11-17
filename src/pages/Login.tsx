@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthService } from "../services/auth.service";
-import { useAuthStore } from "../store/authStore";
 
 type LoginMethod = "email" | "phone";
 
@@ -11,7 +10,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const { login } = useAuthStore();
 
   const handleChange = (field: string, value: string) => {
     setCredentials((prev) => ({ ...prev, [field]: value }));
@@ -23,13 +21,12 @@ export default function Login() {
     setLoading(true);
 
     try {
-      let user;
       if (method === "email") {
         if (!credentials.email) {
           setError("Email is required");
           return;
         }
-        user = await AuthService.signInWithEmail({
+        await AuthService.signInWithEmail({
           email: credentials.email,
           password: credentials.password,
         });
@@ -38,32 +35,13 @@ export default function Login() {
           setError("Phone number is required");
           return;
         }
-        user = await AuthService.signInWithPhone({
+        await AuthService.signInWithPhone({
           phone: credentials.phone,
           password: credentials.password,
         });
       }
 
-      // ✅ Save auth state with role
-      login(user.role);
-
-      // ✅ Role-based redirect
-      switch (user.role) {
-        case "hr_manager":
-          navigate("/dashboard/candidates");
-          break;
-        case "compliance":
-          navigate("/dashboard/compliance");
-          break;
-        case "recruiter":
-          navigate("/dashboard/jobs");
-          break;
-        case "admin":
-          navigate("/dashboard/overview");
-          break;
-        default:
-          navigate("/dashboard/overview");
-      }
+      navigate("/dashboard");
     } catch (err: any) {
       setError(err.message || "Invalid credentials");
     } finally {
