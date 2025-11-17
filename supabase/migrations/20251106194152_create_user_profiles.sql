@@ -72,6 +72,7 @@ CREATE POLICY "Admins can update any profile"
     )
   )
   WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_role ON user_profiles(role);
 
 
 -- Create function to handle updated_at
