@@ -63,7 +63,7 @@ CREATE POLICY "Users can update own profile"
 -- Admins can view all profiles
 CREATE POLICY "Admins can update any profile"
   ON user_profiles
-  FOR UPDATE
+  FOR SELECT
   TO authenticated
   USING (
     EXISTS (
