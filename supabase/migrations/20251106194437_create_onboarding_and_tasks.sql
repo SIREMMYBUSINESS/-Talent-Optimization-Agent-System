@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS onboarding_tasks (
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
+create policy applications_insert_authenticated
+on public.applications
+for insert
+to authenticated
+with check (true);
 
 -- Create training_modules table
 CREATE TABLE IF NOT EXISTS training_modules (
