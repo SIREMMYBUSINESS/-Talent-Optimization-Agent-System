@@ -211,5 +211,3 @@ CREATE TRIGGER update_candidates_updated_at
   BEFORE UPDATE ON candidates
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
-tenant_id uuid REFERENCES tenants(id)
-AND tenant_id = current_setting('app.tenant_id')::uuid

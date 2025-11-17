@@ -86,28 +86,13 @@ ALTER TABLE applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE screening_results ENABLE ROW LEVEL SECURITY;
 
 -- Applications Policies
--- Remove broad SELECT (if already created)
-DROP POLICY IF EXISTS "Authenticated users can view applications" ON applications;
 
--- Users can view applications they are involved in (by candidate)
-CREATE POLICY "Users can view own applications"
+-- Authenticated users can view all applications
+CREATE POLICY "Authenticated users can view applications"
   ON applications
   FOR SELECT
   TO authenticated
-  USING (candidate_id = auth.uid());
-
--- HR staff can view all applications
-CREATE POLICY "HR staff can view all applications"
-  ON applications
-  FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_profiles
-      WHERE id = auth.uid()
-        AND role IN ('admin', 'hr_manager', 'recruiter')
-    )
-  );
+  USING (true);
 
 -- HR staff can create applications
 CREATE POLICY "HR staff can create applications"
@@ -141,19 +126,6 @@ CREATE POLICY "HR staff can update applications"
       AND role IN ('admin', 'hr_manager', 'recruiter')
     )
   );
--- Allow service role to insert/update screening results (optional explicit policy)
-CREATE POLICY "Service role can create screening results"
-  ON screening_results
-  FOR INSERT
-  TO service_role
-  WITH CHECK (true);
-
-CREATE POLICY "Service role can update screening results"
-  ON screening_results
-  FOR UPDATE
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
 
 -- HR staff can delete applications
 CREATE POLICY "HR staff can delete applications"
@@ -211,8 +183,7 @@ CREATE POLICY "HR staff can update screening results"
   );
 
 -- Create indexes
-CREATE INDEX IF NOT EXISTS idx_applications_job_candidate
-  ON applications (job_posting_id, candidate_id);
+CREATE INDEX IF NOT EXISTS idx_applications_job_posting ON applications(job_posting_id);
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 CREATE INDEX IF NOT EXISTS idx_screening_results_score ON screening_results(overall_score DESC);
@@ -221,9 +192,5 @@ CREATE INDEX IF NOT EXISTS idx_screening_results_recommendation ON screening_res
 -- Create trigger for updated_at
 CREATE TRIGGER update_applications_updated_at
   BEFORE UPDATE ON applications
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_screening_results_updated_at
-  BEFORE UPDATE ON screening_results
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();

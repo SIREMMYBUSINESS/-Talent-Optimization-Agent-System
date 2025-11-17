@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import Modal from "../components/Modal";
+
 interface PipelineChartProps {
   data: Array<{
     stage: string;
