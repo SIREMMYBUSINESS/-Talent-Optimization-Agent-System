@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateTime } from "../utils/formatters";
-import Modal from "../components/ui/Modal";
+import Modal from "../components/Modal";
 
 interface AuditEvent {
   id?: string;
