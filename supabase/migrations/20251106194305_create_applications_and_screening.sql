@@ -141,6 +141,19 @@ CREATE POLICY "HR staff can update applications"
       AND role IN ('admin', 'hr_manager', 'recruiter')
     )
   );
+-- Allow service role to insert/update screening results (optional explicit policy)
+CREATE POLICY "Service role can create screening results"
+  ON screening_results
+  FOR INSERT
+  TO service_role
+  WITH CHECK (true);
+
+CREATE POLICY "Service role can update screening results"
+  ON screening_results
+  FOR UPDATE
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
 
 -- HR staff can delete applications
 CREATE POLICY "HR staff can delete applications"
