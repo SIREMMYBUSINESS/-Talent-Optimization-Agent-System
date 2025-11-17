@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Bar, Doughnut } from "react-chartjs-2";
-
+import { getAuditLogs, updateAuditLog, subscribeAuditStream } from "../services/api";
 interface AuditLog {
   id: string;
   candidate_id: string;
