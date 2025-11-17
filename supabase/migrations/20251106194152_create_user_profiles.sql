@@ -89,3 +89,10 @@ CREATE TRIGGER update_user_profiles_updated_at
   BEFORE UPDATE ON user_profiles
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- Replace with actual auth.uid() values
+INSERT INTO user_profiles (id, full_name, role, department, phone)
+VALUES
+  ('00000000-0000-0000-0000-000000000001', 'Alice Admin', 'admin', 'Compliance', '123-456-7890'),
+  ('00000000-0000-0000-0000-000000000002', 'Bob Recruiter', 'recruiter', 'HR', '234-567-8901');
+
