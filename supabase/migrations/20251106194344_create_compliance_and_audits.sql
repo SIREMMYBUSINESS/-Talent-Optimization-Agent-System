@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS privacy_settings (
 ALTER TABLE compliance_audits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE privacy_settings ENABLE ROW LEVEL SECURITY;
+alter table public.applications enable row level security;
+
+-- Allow read for any authenticated user
+create policy applications_read_authenticated
+on public.applications
+for select
+to authenticated
+using (true);
+
 
 -- Compliance Audits Policies
 
@@ -114,6 +123,11 @@ CREATE POLICY "Admins can view compliance audits"
       AND role IN ('admin', 'hr_manager')
     )
   );
+create policy applications_insert_authenticated
+on public.applications
+for insert
+to authenticated
+with check (true);
 
 -- Only system/admins can create compliance audits
 CREATE POLICY "Admins can create compliance audits"
