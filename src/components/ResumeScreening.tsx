@@ -17,7 +17,7 @@ import {
   Download
 } from 'lucide-react';
 import { resumeUploadService, UploadProgress } from '../services/resumeUploadService';
-
+import Modal from "../components/Modal";
 interface ResumeScreeningProps {
   userId: string;
 }
