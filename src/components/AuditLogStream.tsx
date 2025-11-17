@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateTime } from "../utils/formatters";
-import Modal from "../components/ui/Modal"; // adjust path if needed
+import Modal from "../components/ui/Modal";
 
 interface AuditEvent {
   id?: string;
@@ -15,6 +15,8 @@ export function AuditLogStream() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
+  const [filter, setFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
     let mounted = true;
@@ -88,6 +90,19 @@ export function AuditLogStream() {
     return "bg-gray-100 text-gray-800";
   };
 
+  // Apply filter + search
+  const filteredEvents = events.filter((e) => {
+    const matchesFilter =
+      filter === "all" || e.event_type.toLowerCase().includes(filter);
+    const matchesSearch =
+      searchTerm === "" ||
+      e.user_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      JSON.stringify(e.payload)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -103,14 +118,39 @@ export function AuditLogStream() {
           </span>
         </div>
       </div>
+
+      {/* Filter + Search controls */}
+      <div className="px-6 py-2 border-b border-gray-100 flex flex-wrap gap-2 items-center text-sm">
+        {["all", "error", "screen", "audit", "onboard"].map((type) => (
+          <button
+            key={type}
+            onClick={() => setFilter(type)}
+            className={`px-3 py-1 rounded ${
+              filter === type
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {type.charAt(0).toUpperCase() + type.slice(1)}
+          </button>
+        ))}
+        <input
+          type="text"
+          placeholder="Search by user or payload..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 border rounded px-3 py-1 text-sm"
+        />
+      </div>
+
       <div className="max-h-96 overflow-y-auto">
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">
-            <p>Waiting for audit events...</p>
+            <p>No events match filter/search.</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {events.map((event, idx) => (
+            {filteredEvents.map((event, idx) => (
               <button
                 key={idx}
                 onClick={() => setSelectedEvent(event)}
