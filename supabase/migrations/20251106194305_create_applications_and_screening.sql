@@ -169,10 +169,6 @@ CREATE POLICY "HR staff can delete applications"
   );
 
 -- Screening Results Policies
-CREATE TRIGGER update_screening_results_updated_at
-  BEFORE UPDATE ON screening_results
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
 
 -- Authenticated users can view screening results
 CREATE POLICY "Authenticated users can view screening results"
@@ -225,5 +221,9 @@ CREATE INDEX IF NOT EXISTS idx_screening_results_recommendation ON screening_res
 -- Create trigger for updated_at
 CREATE TRIGGER update_applications_updated_at
   BEFORE UPDATE ON applications
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_screening_results_updated_at
+  BEFORE UPDATE ON screening_results
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
