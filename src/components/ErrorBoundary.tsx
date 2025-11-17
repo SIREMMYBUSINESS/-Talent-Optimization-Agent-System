@@ -1,5 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-
+import Modal from "../components/Modal";
 interface Props {
   children: ReactNode;
 }

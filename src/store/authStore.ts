@@ -5,34 +5,23 @@ interface User {
   id: string;
   email?: string;
   phone?: string;
-  role?: 'admin' | 'recruiter' | 'compliance' | 'viewer';
 }
 
 interface AuthState {
   user: User | null;
-  userRole: 'admin' | 'recruiter' | 'compliance' | 'viewer';
   loading: boolean;
-  isLoading: boolean;
   initialized: boolean;
   setUser: (user: User | null) => void;
-  setUserRole: (role: 'admin' | 'recruiter' | 'compliance' | 'viewer') => void;
   signOut: () => Promise<void>;
   initialize: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  userRole: 'viewer',
   loading: false,
-  isLoading: false,
   initialized: false,
 
-  setUser: (user) => {
-    const role = user?.role || 'viewer';
-    set({ user, userRole: role });
-  },
-
-  setUserRole: (role) => set({ userRole: role }),
+  setUser: (user) => set({ user }),
 
   signOut: async () => {
     set({ loading: true });
@@ -47,18 +36,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   initialize: async () => {
-    set({ isLoading: true });
     try {
       const user = await AuthService.getCurrentUser();
-      const role = user?.role || 'viewer';
-      set({ user, userRole: role, initialized: true, isLoading: false });
+      set({ user, initialized: true });
     } catch (error) {
-      set({ user: null, userRole: 'viewer', initialized: true, isLoading: false });
+      set({ user: null, initialized: true });
     }
   },
 }));
 
 AuthService.onAuthStateChange((user) => {
-  const role = user?.role || 'viewer';
-  useAuthStore.setState({ user, userRole: role });
+  useAuthStore.setState({ user });
 });

@@ -61,6 +61,20 @@ CREATE POLICY "Users can update own profile"
   WITH CHECK (auth.uid() = id);
 
 -- Admins can view all profiles
+CREATE POLICY "Admins can update any profile"
+  ON user_profiles
+  FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  )
+  WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_role ON user_profiles(role);
+
+-- Admins can view all profiles
 CREATE POLICY "Admins can view all profiles"
   ON user_profiles
   FOR SELECT
@@ -86,3 +100,10 @@ CREATE TRIGGER update_user_profiles_updated_at
   BEFORE UPDATE ON user_profiles
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- Replace with actual auth.uid() values
+INSERT INTO user_profiles (id, full_name, role, department, phone)
+VALUES
+  ('00000000-0000-0000-0000-000000000001', 'Alice Admin', 'admin', 'Compliance', '123-456-7890'),
+  ('00000000-0000-0000-0000-000000000002', 'Bob Recruiter', 'recruiter', 'HR', '234-567-8901');
+

@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS onboarding_tasks (
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
+create policy applications_insert_authenticated
+on public.applications
+for insert
+to authenticated
+with check (true);
 
 -- Create training_modules table
 CREATE TABLE IF NOT EXISTS training_modules (
@@ -214,6 +219,13 @@ CREATE POLICY "Users can view relevant onboarding tasks"
       )
     )
   );
+insert into public.applications (candidate_id, job_id, status, created_at)
+values
+  (gen_random_uuid(), gen_random_uuid(), 'applied', now() - interval '5 days'),
+  (gen_random_uuid(), gen_random_uuid(), 'screening', now() - interval '3 days'),
+  (gen_random_uuid(), gen_random_uuid(), 'interview', now() - interval '2 days'),
+  (gen_random_uuid(), gen_random_uuid(), 'offer', now() - interval '1 day'),
+  (gen_random_uuid(), gen_random_uuid(), 'rejected', now() - interval '7 hours');
 
 -- HR staff and managers can create tasks
 CREATE POLICY "HR staff and managers can create tasks"

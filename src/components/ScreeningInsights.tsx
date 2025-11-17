@@ -1,5 +1,5 @@
 import { formatDateTime } from '../utils/formatters';
-
+import Modal from "../components/Modal";
 interface ScreeningResult {
   id: string;
   candidateName: string;

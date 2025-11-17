@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { formatDateTime } from '../utils/formatters';
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { formatDateTime } from "../utils/formatters";
+import Modal from "../components/Modal";
 
 interface AuditEvent {
   id?: string;
@@ -13,6 +14,9 @@ interface AuditEvent {
 export function AuditLogStream() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
+  const [filter, setFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
     let mounted = true;
@@ -20,9 +24,9 @@ export function AuditLogStream() {
     const fetchInitialLogs = async () => {
       try {
         const { data, error } = await supabase
-          .from('audit_logs')
-          .select('id, created_at, action, user_id, metadata')
-          .order('created_at', { ascending: false })
+          .from("audit_logs")
+          .select("id, created_at, action, user_id, metadata")
+          .order("created_at", { ascending: false })
           .limit(20);
 
         if (error) throw error;
@@ -32,26 +36,26 @@ export function AuditLogStream() {
             id: log.id,
             timestamp: log.created_at,
             event_type: log.action,
-            user_id: log.user_id || 'system',
+            user_id: log.user_id || "system",
             payload: log.metadata || {},
           }));
           setEvents(formattedEvents);
         }
       } catch (error) {
-        console.error('Failed to fetch initial audit logs:', error);
+        console.error("Failed to fetch initial audit logs:", error);
       }
     };
 
     fetchInitialLogs();
 
     const channel = supabase
-      .channel('audit_logs_changes')
+      .channel("audit_logs_changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'audit_logs',
+          event: "INSERT",
+          schema: "public",
+          table: "audit_logs",
         },
         (payload) => {
           if (mounted) {
@@ -59,7 +63,7 @@ export function AuditLogStream() {
               id: payload.new.id,
               timestamp: payload.new.created_at,
               event_type: payload.new.action,
-              user_id: payload.new.user_id || 'system',
+              user_id: payload.new.user_id || "system",
               payload: payload.new.metadata || {},
             };
             setEvents((prev) => [newEvent, ...prev].slice(0, 50));
@@ -68,7 +72,7 @@ export function AuditLogStream() {
       )
       .subscribe((status) => {
         if (mounted) {
-          setIsConnected(status === 'SUBSCRIBED');
+          setIsConnected(status === "SUBSCRIBED");
         }
       });
 
@@ -79,58 +83,138 @@ export function AuditLogStream() {
   }, []);
 
   const getEventTypeColor = (eventType: string) => {
-    if (eventType.includes('error')) return 'bg-red-100 text-red-800';
-    if (eventType.includes('screen')) return 'bg-blue-100 text-blue-800';
-    if (eventType.includes('audit')) return 'bg-purple-100 text-purple-800';
-    if (eventType.includes('onboard')) return 'bg-green-100 text-green-800';
-    return 'bg-gray-100 text-gray-800';
+    if (eventType.includes("error")) return "bg-red-100 text-red-800";
+    if (eventType.includes("screen")) return "bg-blue-100 text-blue-800";
+    if (eventType.includes("audit")) return "bg-purple-100 text-purple-800";
+    if (eventType.includes("onboard")) return "bg-green-100 text-green-800";
+    return "bg-gray-100 text-gray-800";
   };
+
+  // Apply filter + search
+  const filteredEvents = events.filter((e) => {
+    const matchesFilter =
+      filter === "all" || e.event_type.toLowerCase().includes(filter);
+    const matchesSearch =
+      searchTerm === "" ||
+      e.user_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      JSON.stringify(e.payload)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Live Audit Stream</h3>
         <div className="flex items-center space-x-2">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <div
+            className={`w-2 h-2 rounded-full ${
+              isConnected ? "bg-green-500" : "bg-red-500"
+            }`}
+          ></div>
           <span className="text-xs text-gray-500">
-            {isConnected ? 'Connected' : 'Disconnected'}
+            {isConnected ? "Connected" : "Disconnected"}
           </span>
         </div>
       </div>
+
+      {/* Filter + Search controls */}
+      <div className="px-6 py-2 border-b border-gray-100 flex flex-wrap gap-2 items-center text-sm">
+        {["all", "error", "screen", "audit", "onboard"].map((type) => (
+          <button
+            key={type}
+            onClick={() => setFilter(type)}
+            className={`px-3 py-1 rounded ${
+              filter === type
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {type.charAt(0).toUpperCase() + type.slice(1)}
+          </button>
+        ))}
+        <input
+          type="text"
+          placeholder="Search by user or payload..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 border rounded px-3 py-1 text-sm"
+        />
+      </div>
+
       <div className="max-h-96 overflow-y-auto">
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">
-            <p>Waiting for audit events...</p>
+            <p>No events match filter/search.</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {events.map((event, idx) => (
-              <div key={idx} className="px-6 py-3 hover:bg-gray-50 text-sm">
+            {filteredEvents.map((event, idx) => (
+              <button
+                key={idx}
+                onClick={() => setSelectedEvent(event)}
+                className="w-full text-left px-6 py-3 hover:bg-gray-50 text-sm"
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 text-xs font-medium rounded ${getEventTypeColor(event.event_type)}`}>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded ${getEventTypeColor(
+                          event.event_type
+                        )}`}
+                      >
                         {event.event_type}
                       </span>
                       {event.user_id && (
-                        <span className="text-xs text-gray-500">by {event.user_id}</span>
+                        <span className="text-xs text-gray-500">
+                          by {event.user_id}
+                        </span>
                       )}
                     </div>
-                    {event.payload && Object.keys(event.payload).length > 0 && (
-                      <div className="mt-1 text-xs text-gray-600">
-                        {JSON.stringify(event.payload).substring(0, 100)}
-                      </div>
-                    )}
+                    {event.payload &&
+                      Object.keys(event.payload).length > 0 && (
+                        <div className="mt-1 text-xs text-gray-600">
+                          {JSON.stringify(event.payload).substring(0, 100)}…
+                        </div>
+                      )}
                   </div>
                   <span className="text-xs text-gray-400 whitespace-nowrap ml-4">
                     {formatDateTime(event.timestamp)}
                   </span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal for event details */}
+      {selectedEvent && (
+        <Modal
+          isOpen={!!selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          title="Audit Event Details"
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <strong>Event Type:</strong> {selectedEvent.event_type}
+            </p>
+            <p>
+              <strong>User:</strong> {selectedEvent.user_id}
+            </p>
+            <p>
+              <strong>Timestamp:</strong>{" "}
+              {formatDateTime(selectedEvent.timestamp)}
+            </p>
+            {selectedEvent.payload && (
+              <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
+                {JSON.stringify(selectedEvent.payload, null, 2)}
+              </pre>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

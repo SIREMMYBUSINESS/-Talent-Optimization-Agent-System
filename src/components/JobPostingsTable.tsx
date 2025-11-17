@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { formatDate, getStatusColor } from '../utils/formatters';
-
+import Modal from "../components/Modal";
 interface JobPosting {
   id: string;
   title: string;
