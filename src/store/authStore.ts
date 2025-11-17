@@ -5,6 +5,7 @@ interface User {
   id: string;
   email?: string;
   phone?: string;
+  role?: string;
 }
 
 interface AuthState {
@@ -12,6 +13,7 @@ interface AuthState {
   loading: boolean;
   initialized: boolean;
   setUser: (user: User | null) => void;
+  login: (user: User) => void;
   signOut: () => Promise<void>;
   initialize: () => Promise<void>;
 }
@@ -22,6 +24,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   initialized: false,
 
   setUser: (user) => set({ user }),
+
+  // ⭐ NEW LOGIN FUNCTION
+  login: (user) => set({ user }),
 
   signOut: async () => {
     set({ loading: true });
@@ -39,7 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const user = await AuthService.getCurrentUser();
       set({ user, initialized: true });
-    } catch (error) {
+    } catch {
       set({ user: null, initialized: true });
     }
   },
