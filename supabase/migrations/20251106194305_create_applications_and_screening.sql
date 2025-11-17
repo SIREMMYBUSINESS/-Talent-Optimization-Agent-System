@@ -169,6 +169,10 @@ CREATE POLICY "HR staff can delete applications"
   );
 
 -- Screening Results Policies
+CREATE TRIGGER update_screening_results_updated_at
+  BEFORE UPDATE ON screening_results
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
 
 -- Authenticated users can view screening results
 CREATE POLICY "Authenticated users can view screening results"
