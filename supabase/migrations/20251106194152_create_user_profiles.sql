@@ -63,7 +63,7 @@ CREATE POLICY "Users can update own profile"
 -- Admins can view all profiles
 CREATE POLICY "Admins can update any profile"
   ON user_profiles
-  FOR SELECT
+  FOR UPDATE
   TO authenticated
   USING (
     EXISTS (
@@ -74,6 +74,17 @@ CREATE POLICY "Admins can update any profile"
   WITH CHECK (true);
 CREATE INDEX IF NOT EXISTS idx_user_profiles_role ON user_profiles(role);
 
+-- Admins can view all profiles
+CREATE POLICY "Admins can view all profiles"
+  ON user_profiles
+  FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
 
 -- Create function to handle updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
