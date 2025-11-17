@@ -86,13 +86,28 @@ ALTER TABLE applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE screening_results ENABLE ROW LEVEL SECURITY;
 
 -- Applications Policies
+-- Remove broad SELECT (if already created)
+DROP POLICY IF EXISTS "Authenticated users can view applications" ON applications;
 
--- Authenticated users can view all applications
-CREATE POLICY "Authenticated users can view applications"
+-- Users can view applications they are involved in (by candidate)
+CREATE POLICY "Users can view own applications"
   ON applications
   FOR SELECT
   TO authenticated
-  USING (true);
+  USING (candidate_id = auth.uid());
+
+-- HR staff can view all applications
+CREATE POLICY "HR staff can view all applications"
+  ON applications
+  FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_profiles
+      WHERE id = auth.uid()
+        AND role IN ('admin', 'hr_manager', 'recruiter')
+    )
+  );
 
 -- HR staff can create applications
 CREATE POLICY "HR staff can create applications"
