@@ -1,5 +1,5 @@
 import { formatDateTime, getStatusColor } from '../utils/formatters';
-
+import Modal from "../components/Modal"
 interface Candidate {
   id: string;
   fullName: string;
