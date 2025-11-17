@@ -1,16 +1,11 @@
-// 📊 Dashboard Components
-export { AuditLogStream } from './AuditLogStream';
-export { CandidateCard } from './CandidateCard';
-export { JobPostingsTable } from './JobPostingsTable';
 export { MetricsCard } from './MetricsCard';
 export { PipelineChart } from './PipelineChart';
+export { JobPostingsTable } from './JobPostingsTable';
 export { ScreeningInsights } from './ScreeningInsights';
-export { StatsOverview } from './StatsOverview';
-
-// 🧩 UI Utilities
+export { AuditLogStream } from './AuditLogStream';
+export { LoadingSpinner } from './LoadingSpinner';
 export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
-export { LoadingSpinner } from './LoadingSpinner';
-
-// 🛠️ Modals
-export { EditJobModal } from './EditJobModal';
+export { StatsOverview } from './StatsOverview';
+export { CandidateCard } from './CandidateCard';
+export { ProtectedRoute } from './ProtectedRoute';
