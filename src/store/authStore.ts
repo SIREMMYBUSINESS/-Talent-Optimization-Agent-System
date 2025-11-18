@@ -1,19 +1,16 @@
-import { create } from "zustand";
-import { AuthService } from "../services/auth.service";
+import { create } from 'zustand';
+import { AuthService } from '../services/auth.service';
 
 interface User {
   id: string;
   email?: string;
   phone?: string;
-  role: string; // 👈 added role
 }
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   initialized: boolean;
-
-  login: (user: User) => void;
   setUser: (user: User | null) => void;
   signOut: () => Promise<void>;
   initialize: () => Promise<void>;
@@ -24,9 +21,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: false,
   initialized: false,
 
-  // NEW LOGIN
-  login: (user) => set({ user }),
-
   setUser: (user) => set({ user }),
 
   signOut: async () => {
@@ -34,6 +28,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await AuthService.signOut();
       set({ user: null });
+    } catch (error) {
+      console.error('Sign out error:', error);
     } finally {
       set({ loading: false });
     }
@@ -43,13 +39,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const user = await AuthService.getCurrentUser();
       set({ user, initialized: true });
-    } catch {
+    } catch (error) {
       set({ user: null, initialized: true });
     }
   },
 }));
 
-// Sync external auth events
 AuthService.onAuthStateChange((user) => {
   useAuthStore.setState({ user });
 });
