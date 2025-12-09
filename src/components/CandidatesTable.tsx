@@ -1,44 +1,27 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { talentService, JobPosting } from '../services/talent.service';
+import { useQuery } from '@tanstack/react-query';
+import { talentService, Candidate } from '../services/talent.service';
 import { LoadingSpinner } from './LoadingSpinner';
 import { EmptyState } from './EmptyState';
-import { formatDate, getStatusColor } from '../utils/formatters';
 
-interface JobPostingsTableProps {
-  statusFilter?: string;
-  departmentFilter?: string;
+interface CandidatesTableProps {
+  onSelectCandidate?: (candidate: Candidate) => void;
+  sourceFilter?: string;
 }
 
-export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostingsTableProps) {
-  const navigate = useNavigate();
+export function CandidatesTable({ onSelectCandidate, sourceFilter }: CandidatesTableProps) {
   const [page, setPage] = useState(0);
   const limit = 20;
-  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobPostings', page, statusFilter, departmentFilter],
+    queryKey: ['candidates', page, sourceFilter],
     queryFn: () =>
-      talentService.listJobPostings({
+      talentService.listCandidates({
         limit,
         offset: page * limit,
-        status: statusFilter,
-        department: departmentFilter,
+        source: sourceFilter,
       }),
   });
-
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      talentService.updateJobPosting(id, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobPostings'] });
-    },
-  });
-
-  const handleRowClick = (jobId: string) => {
-    navigate(`/jobs/${jobId}`);
-  };
 
   if (isLoading) {
     return (
@@ -51,13 +34,13 @@ export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostings
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-800">Failed to load job postings: {(error as Error).message}</p>
+        <p className="text-red-800">Failed to load candidates: {(error as Error).message}</p>
       </div>
     );
   }
 
   if (!data?.items.length) {
-    return <EmptyState message="No job postings found" />;
+    return <EmptyState message="No candidates found" />;
   }
 
   return (
@@ -67,19 +50,19 @@ export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostings
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Title
+                Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Department
+                Email
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Location
+                Experience
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                Skills
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Posted
+                Source
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -87,43 +70,55 @@ export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostings
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.items.map((job) => (
+            {data.items.map((candidate) => (
               <tr
-                key={job.id}
+                key={candidate.id}
                 className="hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleRowClick(job.id)}
+                onClick={() => onSelectCandidate?.(candidate)}
               >
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{job.title}</div>
+                  <div className="text-sm font-medium text-gray-900">{candidate.full_name}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{job.department || 'N/A'}</div>
+                  <div className="text-sm text-gray-500">{candidate.email}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{job.location || 'N/A'}</div>
+                  <div className="text-sm text-gray-900">
+                    {candidate.experience_years} years
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex flex-wrap gap-1">
+                    {candidate.skills.slice(0, 3).map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                    {candidate.skills.length > 3 && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                        +{candidate.skills.length - 3}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(job.status)}`}
-                  >
-                    {job.status}
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {candidate.source}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(job.created_at)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
-                  <select
-                    value={job.status}
-                    onChange={(e) =>
-                      updateStatusMutation.mutate({ id: job.id, status: e.target.value })
-                    }
-                    className="text-sm border-gray-300 rounded-md"
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectCandidate?.(candidate);
+                    }}
+                    className="text-blue-600 hover:text-blue-900"
                   >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="closed">Closed</option>
-                  </select>
+                    View
+                  </button>
                 </td>
               </tr>
             ))}

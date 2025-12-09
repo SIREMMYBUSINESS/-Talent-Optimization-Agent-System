@@ -6,8 +6,11 @@ interface AuditEvent {
   id?: string;
   timestamp: string;
   event_type: string;
+  action?: string;
+  actor?: string;
   user_id?: string;
   payload?: Record<string, any>;
+  metadata?: Record<string, any>;
 }
 
 export function AuditLogStream() {
@@ -16,65 +19,65 @@ export function AuditLogStream() {
 
   useEffect(() => {
     let mounted = true;
+    let eventSource: EventSource | null = null;
 
-    const fetchInitialLogs = async () => {
+    const connectToStream = async () => {
       try {
-        const { data, error } = await supabase
-          .from('audit_logs')
-          .select('id, created_at, action, user_id, metadata')
-          .order('created_at', { ascending: false })
-          .limit(20);
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-        if (error) throw error;
-
-        if (mounted && data) {
-          const formattedEvents = data.map((log) => ({
-            id: log.id,
-            timestamp: log.created_at,
-            event_type: log.action,
-            user_id: log.user_id || 'system',
-            payload: log.metadata || {},
-          }));
-          setEvents(formattedEvents);
+        if (!session?.access_token) {
+          console.error('No auth token available for SSE connection');
+          return;
         }
+
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const url = `${apiUrl}/admin/audit-logs/stream`;
+
+        eventSource = new EventSource(url);
+
+        eventSource.onopen = () => {
+          if (mounted) {
+            setIsConnected(true);
+          }
+        };
+
+        eventSource.onmessage = (event) => {
+          if (mounted) {
+            try {
+              const data = JSON.parse(event.data);
+              const newEvent: AuditEvent = {
+                id: data.id,
+                timestamp: data.timestamp || new Date().toISOString(),
+                event_type: data.action || data.event_type || 'unknown',
+                user_id: data.actor || data.user_id || 'system',
+                payload: data.metadata || data.payload || {},
+              };
+              setEvents((prev) => [newEvent, ...prev].slice(0, 50));
+            } catch (error) {
+              console.error('Failed to parse SSE event:', error);
+            }
+          }
+        };
+
+        eventSource.onerror = (error) => {
+          console.error('SSE connection error:', error);
+          if (mounted) {
+            setIsConnected(false);
+          }
+          eventSource?.close();
+        };
       } catch (error) {
-        console.error('Failed to fetch initial audit logs:', error);
+        console.error('Failed to connect to audit stream:', error);
       }
     };
 
-    fetchInitialLogs();
-
-    const channel = supabase
-      .channel('audit_logs_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'audit_logs',
-        },
-        (payload) => {
-          if (mounted) {
-            const newEvent = {
-              id: payload.new.id,
-              timestamp: payload.new.created_at,
-              event_type: payload.new.action,
-              user_id: payload.new.user_id || 'system',
-              payload: payload.new.metadata || {},
-            };
-            setEvents((prev) => [newEvent, ...prev].slice(0, 50));
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (mounted) {
-          setIsConnected(status === 'SUBSCRIBED');
-        }
-      });
+    connectToStream();
 
     return () => {
       mounted = false;
-      supabase.removeChannel(channel);
+      eventSource?.close();
     };
   }, []);
 

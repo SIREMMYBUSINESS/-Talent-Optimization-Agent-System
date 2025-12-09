@@ -85,3 +85,6 @@ async def user_slot_release(user_key: str) -> None:
     except Exception:
         # ignore errors
         pass
+
+
+check_rate_limit = rate_limit_check

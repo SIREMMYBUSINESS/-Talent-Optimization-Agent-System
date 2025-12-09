@@ -8,3 +8,5 @@ export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
 export { StatsOverview } from './StatsOverview';
 export { CandidateCard } from './CandidateCard';
+export { CandidatesTable } from './CandidatesTable';
+export { ApplicationsTable } from './ApplicationsTable';

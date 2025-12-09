@@ -1,0 +1,3 @@
+"""
+Library module initialization.
+"""

@@ -1,44 +1,60 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { talentService, JobPosting } from '../services/talent.service';
+import { talentService, Application } from '../services/talent.service';
 import { LoadingSpinner } from './LoadingSpinner';
 import { EmptyState } from './EmptyState';
-import { formatDate, getStatusColor } from '../utils/formatters';
+import { formatDistanceToNow } from 'date-fns';
 
-interface JobPostingsTableProps {
+interface ApplicationsTableProps {
+  jobId?: string;
+  candidateId?: string;
   statusFilter?: string;
-  departmentFilter?: string;
 }
 
-export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostingsTableProps) {
-  const navigate = useNavigate();
+const STATUS_COLORS: Record<string, string> = {
+  submitted: 'bg-blue-100 text-blue-800',
+  screening: 'bg-yellow-100 text-yellow-800',
+  review: 'bg-purple-100 text-purple-800',
+  interview: 'bg-indigo-100 text-indigo-800',
+  offer: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+  withdrawn: 'bg-gray-100 text-gray-800',
+  hired: 'bg-emerald-100 text-emerald-800',
+};
+
+export function ApplicationsTable({ jobId, candidateId, statusFilter }: ApplicationsTableProps) {
   const [page, setPage] = useState(0);
+  const [selectedApp, setSelectedApp] = useState<string | null>(null);
   const limit = 20;
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobPostings', page, statusFilter, departmentFilter],
+    queryKey: ['applications', page, jobId, candidateId, statusFilter],
     queryFn: () =>
-      talentService.listJobPostings({
+      talentService.listApplications({
         limit,
         offset: page * limit,
+        job_id: jobId,
+        candidate_id: candidateId,
         status: statusFilter,
-        department: departmentFilter,
       }),
+  });
+
+  const screenMutation = useMutation({
+    mutationFn: (applicationId: string) =>
+      talentService.screenApplication(applicationId, { application_id: applicationId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+    },
   });
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      talentService.updateJobPosting(id, { status }),
+      talentService.updateApplication(id, { status }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['jobPostings'] });
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
     },
   });
-
-  const handleRowClick = (jobId: string) => {
-    navigate(`/jobs/${jobId}`);
-  };
 
   if (isLoading) {
     return (
@@ -51,13 +67,13 @@ export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostings
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-800">Failed to load job postings: {(error as Error).message}</p>
+        <p className="text-red-800">Failed to load applications: {(error as Error).message}</p>
       </div>
     );
   }
 
   if (!data?.items.length) {
-    return <EmptyState message="No job postings found" />;
+    return <EmptyState message="No applications found" />;
   }
 
   return (
@@ -67,19 +83,16 @@ export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostings
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Title
+                Candidate
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Department
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Location
+                Job
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Posted
+                Applied
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -87,42 +100,61 @@ export function JobPostingsTable({ statusFilter, departmentFilter }: JobPostings
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.items.map((job) => (
-              <tr
-                key={job.id}
-                className="hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleRowClick(job.id)}
-              >
+            {data.items.map((application) => (
+              <tr key={application.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{job.title}</div>
+                  <div className="text-sm font-medium text-gray-900">
+                    {application.candidates?.full_name || 'Unknown'}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {application.candidates?.email || ''}
+                  </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{job.department || 'N/A'}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{job.location || 'N/A'}</div>
+                <td className="px-6 py-4">
+                  <div className="text-sm text-gray-900">
+                    {application.job_postings?.title || 'Unknown'}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {application.job_postings?.department || ''}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(job.status)}`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      STATUS_COLORS[application.status] || 'bg-gray-100 text-gray-800'
+                    }`}
                   >
-                    {job.status}
+                    {application.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(job.created_at)}
+                  {formatDistanceToNow(new Date(application.applied_at), { addSuffix: true })}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                  {application.status === 'submitted' && (
+                    <button
+                      onClick={() => screenMutation.mutate(application.id)}
+                      disabled={screenMutation.isPending}
+                      className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                    >
+                      Screen
+                    </button>
+                  )}
                   <select
-                    value={job.status}
+                    value={application.status}
                     onChange={(e) =>
-                      updateStatusMutation.mutate({ id: job.id, status: e.target.value })
+                      updateStatusMutation.mutate({ id: application.id, status: e.target.value })
                     }
                     className="text-sm border-gray-300 rounded-md"
                   >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="closed">Closed</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="screening">Screening</option>
+                    <option value="review">Review</option>
+                    <option value="interview">Interview</option>
+                    <option value="offer">Offer</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="withdrawn">Withdrawn</option>
+                    <option value="hired">Hired</option>
                   </select>
                 </td>
               </tr>

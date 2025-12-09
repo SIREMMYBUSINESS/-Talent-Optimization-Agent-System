@@ -13,18 +13,22 @@ from typing import List, Optional, AsyncGenerator
 
 import aiofiles
 import uvicorn
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, Query, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, Query, Security, status
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from src.agents.compliance_auditor import ComplianceAuditor
 from src.agents.onboarding_planner import OnboardingPlanner
 from src.agents.resume_screener import ResumeScreener
+from src.agents.audit_stream import event_generator
 from src.integrations.nemo_retriever import NeMoRetriever
 from src.integrations.workday_api import WorkdayClient
 from src.utils.audit_logger import AuditLogger
 from src.auth.jwks_middleware import jwks_client, get_current_user, require_roles
 from src import db as dbmod
+from src.routes import talent_workflows
+from src.middleware.rate_limiter import rate_limit_middleware
 
 # instantiate shared clients (audit_logger initialized with fallback behavior)
 audit_logger = AuditLogger()
@@ -36,7 +40,11 @@ screener = ResumeScreener(retriever=nemo, audit=audit_logger)
 auditor = ComplianceAuditor(audit=audit_logger)
 planner = OnboardingPlanner(workday_client=workday, audit=audit_logger)
 
-app = FastAPI(title="Talent Optimization Agent", version="0.4.0")
+app = FastAPI(title="Talent Optimization Agent", version="0.5.0")
+
+app.middleware("http")(rate_limit_middleware)
+
+app.include_router(talent_workflows.router)
 
 
 class ScreenResponse(BaseModel):
@@ -191,30 +199,15 @@ async def admin_audit_logs(limit: int = Query(50, ge=1, le=1000), offset: int = 
 
 
 @app.get("/admin/audit-logs/stream", dependencies=[Depends(require_roles("admin", "auditor"))])
-async def admin_audit_logs_stream(user=Depends(get_current_user)):
+async def admin_audit_logs_stream(credentials: Optional[HTTPAuthorizationCredentials] = Security(HTTPBearer(auto_error=False)), user=Depends(get_current_user)):
     """
     Server-Sent Events (SSE) endpoint streaming audit events live.
     Each event is sent as a JSON payload in the 'data:' field.
     Protected by JWKS role guard (admin/auditor).
     """
-
-    async def event_generator() -> AsyncGenerator[bytes, None]:
-        # Subscribe to audit_logger events (yields dicts)
-        try:
-            async for evt in audit_logger.subscribe():
-                # format as SSE "data: <json>\n\n"
-                try:
-                    data = json.dumps(evt, ensure_ascii=False)
-                except Exception:
-                    data = json.dumps({"error": "serialization_error"})
-                yield f"data: {data}\n\n".encode("utf-8")
-        except asyncio.CancelledError:
-            # client disconnected
-            return
-        except Exception:
-            return
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    token = credentials.credentials if credentials else None
+    generator = event_generator(audit_logger, token=token)
+    return StreamingResponse(generator, media_type="text/event-stream")
 
 
 if __name__ == "__main__":
