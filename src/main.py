@@ -198,16 +198,44 @@ async def admin_audit_logs(limit: int = Query(50, ge=1, le=1000), offset: int = 
     return {"items": rows, "limit": limit, "offset": offset}
 
 
-@app.get("/admin/audit-logs/stream", dependencies=[Depends(require_roles("admin", "auditor"))])
-async def admin_audit_logs_stream(credentials: Optional[HTTPAuthorizationCredentials] = Security(HTTPBearer(auto_error=False)), user=Depends(get_current_user)):
+@app.get("/admin/audit-logs/stream")
+async def admin_audit_logs_stream(
+    token: Optional[str] = Query(None, description="JWT token for authentication"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(HTTPBearer(auto_error=False))
+):
     """
     Server-Sent Events (SSE) endpoint streaming audit events live.
     Each event is sent as a JSON payload in the 'data:' field.
-    Protected by JWKS role guard (admin/auditor).
+    Accepts JWT token via query parameter (for EventSource) or Authorization header.
     """
-    token = credentials.credentials if credentials else None
-    generator = event_generator(audit_logger, token=token)
-    return StreamingResponse(generator, media_type="text/event-stream")
+    auth_token = token or (credentials.credentials if credentials else None)
+
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication required. Provide token via query parameter or Authorization header.")
+
+    from src.auth.jwks_middleware import _decode_jwt
+    try:
+        payload = await _decode_jwt(auth_token)
+        user_roles = set([r.lower() for r in (payload.get("roles") or [])])
+        allowed_roles = {"admin", "auditor"}
+        if not (user_roles & allowed_roles):
+            raise HTTPException(status_code=403, detail="Insufficient role for audit stream access")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(exc)}")
+
+    generator = event_generator(audit_logger, token=auth_token)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": "true",
+    }
+
+    return StreamingResponse(generator, media_type="text/event-stream", headers=headers)
 
 
 if __name__ == "__main__":

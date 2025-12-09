@@ -26,9 +26,10 @@ _local_lock = asyncio.Lock()
 
 
 DEFAULT_INACTIVITY_TTL = int(__import__("os").environ.get("SSE_INACTIVITY_TTL", "60"))  # seconds
+KEEPALIVE_INTERVAL = int(__import__("os").environ.get("SSE_KEEPALIVE_INTERVAL", "15"))  # seconds
 
 
-async def event_generator(audit_logger: AuditLogger, token: Optional[str] = None, inactivity_ttl: int = DEFAULT_INACTIVITY_TTL) -> AsyncGenerator[bytes, None]:
+async def event_generator(audit_logger: AuditLogger, token: Optional[str] = None, inactivity_ttl: int = DEFAULT_INACTIVITY_TTL, keepalive_interval: int = KEEPALIVE_INTERVAL) -> AsyncGenerator[bytes, None]:
     user_sub = None
     acquired = False
     start = time.time()
@@ -74,33 +75,50 @@ async def event_generator(audit_logger: AuditLogger, token: Optional[str] = None
                     _local_active_connections += 1
 
         gen = audit_logger.subscribe()
+        last_keepalive = time.time()
+
         while True:
-            # recompute remaining ttl and set timeout
             timeout_candidates = []
             if token_ttl is not None:
-                # recompute actual remaining time
                 token_ttl = int((payload.get("exp") or 0) - time.time())
                 if token_ttl <= 0:
-                    # token expired
                     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
                 timeout_candidates.append(token_ttl)
             if inactivity_ttl:
                 timeout_candidates.append(inactivity_ttl)
-            timeout = min(timeout_candidates) if timeout_candidates else None
+            timeout_candidates.append(keepalive_interval)
+            timeout = min(timeout_candidates) if timeout_candidates else keepalive_interval
 
             try:
                 if timeout:
                     item = await asyncio.wait_for(gen.__anext__(), timeout=timeout)
                 else:
                     item = await gen.__anext__()
-            except asyncio.TimeoutError:
-                # either inactivity or token expiry
-                # increment dropped metrics
+
                 try:
-                    await hincrby("dropped_clients", 1)
+                    payload_json = json.dumps(item, ensure_ascii=False)
+                except Exception:
+                    payload_json = json.dumps({"error": "serialization_error"})
+                try:
+                    await hincrby("events_sent", 1)
                 except Exception:
                     pass
-                break
+                yield f"data: {payload_json}\n\n".encode("utf-8")
+                last_keepalive = time.time()
+
+            except asyncio.TimeoutError:
+                now = time.time()
+                if now - last_keepalive >= keepalive_interval:
+                    yield f": keepalive {int(now)}\n\n".encode("utf-8")
+                    last_keepalive = now
+
+                if token_ttl is not None and token_ttl <= 0:
+                    try:
+                        await hincrby("dropped_clients", 1)
+                    except Exception:
+                        pass
+                    break
+                continue
             except StopAsyncIteration:
                 break
             except Exception:
@@ -109,18 +127,6 @@ async def event_generator(audit_logger: AuditLogger, token: Optional[str] = None
                 except Exception:
                     pass
                 break
-
-            try:
-                payload_json = json.dumps(item, ensure_ascii=False)
-            except Exception:
-                payload_json = json.dumps({"error": "serialization_error"})
-            # metrics
-            try:
-                await hincrby("events_sent", 1)
-            except Exception:
-                pass
-
-            yield f"data: {payload_json}\n\n".encode("utf-8")
     finally:
         # release per-user slot and decrement active counters
         try:
