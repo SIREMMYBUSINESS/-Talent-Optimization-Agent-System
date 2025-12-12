@@ -50,7 +50,7 @@ export function ApprovalWorkflow({
   const displaySteps = steps || defaultSteps;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="@container bg-white rounded-lg shadow p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-6">Manager Override Approval Workflow</h3>
 
       <div className="space-y-4">
@@ -99,7 +99,7 @@ export function ApprovalWorkflow({
       </div>
 
       {displaySteps.some((s) => s.status === 'current') && (
-        <div className="mt-6 pt-6 border-t border-gray-200 flex flex-col sm:flex-row gap-3">
+        <div className="mt-6 pt-6 border-t border-gray-200 flex flex-col @sm:flex-row gap-3">
           <button
             onClick={onApprove}
             disabled={isLoading}
