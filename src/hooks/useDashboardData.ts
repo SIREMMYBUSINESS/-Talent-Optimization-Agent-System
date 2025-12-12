@@ -420,3 +420,197 @@ export const useComplianceAlertActions = () => {
     isError: updateAlertStatus.isError,
   };
 };
+
+export const useScreeningMetrics = (timeRange: TimeRangeFilter) => {
+  const { start, end } = getDateRange(timeRange);
+
+  return useQuery({
+    queryKey: ['screening-metrics', timeRange],
+    queryFn: async () => {
+      const { data: results, error } = await supabase
+        .from('screening_results')
+        .select('overall_score, privacy_protected_score, screened_at')
+        .gte('screened_at', start.toISOString())
+        .lte('screened_at', end.toISOString());
+
+      if (error) throw error;
+
+      const dpScores = results?.filter((r: any) => r.privacy_protected_score !== null) || [];
+      const nonDpScores = results?.filter((r: any) => r.privacy_protected_score === null) || [];
+
+      const dpAccuracy = dpScores.length
+        ? dpScores.reduce((sum: number, r: any) => sum + r.privacy_protected_score, 0) / dpScores.length
+        : 0;
+
+      const nonDpAccuracy = nonDpScores.length
+        ? nonDpScores.reduce((sum: number, r: any) => sum + r.overall_score, 0) / nonDpScores.length
+        : 0;
+
+      const avgLatency = results?.length
+        ? results.reduce((sum: number, r: any) => {
+            const created = new Date(r.screened_at);
+            return sum + (Date.now() - created.getTime());
+          }, 0) / results.length / 1000
+        : 0;
+
+      return {
+        dpAccuracy: Math.round(dpAccuracy),
+        nonDpAccuracy: Math.round(nonDpAccuracy),
+        totalScreenings: results?.length || 0,
+        avgLatencySeconds: Math.round(avgLatency),
+        confidenceDistribution: {
+          high: results?.filter((r: any) => r.overall_score >= 80).length || 0,
+          medium: results?.filter((r: any) => r.overall_score >= 60 && r.overall_score < 80).length || 0,
+          low: results?.filter((r: any) => r.overall_score < 60).length || 0,
+        },
+      };
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useAnalyticsData = (timeRange: TimeRangeFilter) => {
+  const { start, end } = getDateRange(timeRange);
+
+  return useQuery({
+    queryKey: ['analytics-data', timeRange],
+    queryFn: async () => {
+      const { data: apps, error } = await supabase
+        .from('applications')
+        .select('status, created_at')
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString());
+
+      if (error) throw error;
+
+      const stages = {
+        resume: apps?.length || 0,
+        screening: apps?.filter((a: any) => a.status === 'screening_reviewed').length || 0,
+        interview: apps?.filter((a: any) => a.status === 'interview_scheduled').length || 0,
+        offer: apps?.filter((a: any) => a.status === 'offer_extended').length || 0,
+        hire: apps?.filter((a: any) => a.status === 'hired').length || 0,
+      };
+
+      const funnel = [
+        { stage: 'Resume', value: stages.resume, percentage: 100 },
+        { stage: 'Screening', value: stages.screening, percentage: stages.resume > 0 ? (stages.screening / stages.resume) * 100 : 0 },
+        { stage: 'Interview', value: stages.interview, percentage: stages.screening > 0 ? (stages.interview / stages.screening) * 100 : 0 },
+        { stage: 'Offer', value: stages.offer, percentage: stages.interview > 0 ? (stages.offer / stages.interview) * 100 : 0 },
+        { stage: 'Hire', value: stages.hire, percentage: stages.offer > 0 ? (stages.hire / stages.offer) * 100 : 0 },
+      ];
+
+      const dropoff = [
+        { name: 'Resume to Screening', value: Math.max(0, stages.resume - stages.screening) },
+        { name: 'Screening to Interview', value: Math.max(0, stages.screening - stages.interview) },
+        { name: 'Interview to Offer', value: Math.max(0, stages.interview - stages.offer) },
+        { name: 'Offer to Hire', value: Math.max(0, stages.offer - stages.hire) },
+      ];
+
+      return { funnel, dropoff };
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useTalentInsights = (timeRange: TimeRangeFilter) => {
+  const { start, end } = getDateRange(timeRange);
+
+  return useQuery({
+    queryKey: ['talent-insights', timeRange],
+    queryFn: async () => {
+      const { data: results, error } = await supabase
+        .from('screening_results')
+        .select('overall_score, skills_match')
+        .gte('screened_at', start.toISOString())
+        .lte('screened_at', end.toISOString());
+
+      if (error) throw error;
+
+      const skillFrequency: Record<string, number> = {};
+      results?.forEach((r: any) => {
+        const skills = r.skills_match?.matched || [];
+        skills.forEach((skill: string) => {
+          skillFrequency[skill] = (skillFrequency[skill] || 0) + 1;
+        });
+      });
+
+      const topSkills = Object.entries(skillFrequency)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10)
+        .map(([skill, count]) => ({ skill, proficiency: Math.min(count * 10, 100) }));
+
+      const avgScore = results?.length
+        ? results.reduce((sum: number, r: any) => sum + r.overall_score, 0) / results.length
+        : 0;
+
+      return {
+        avgHiringScore: Math.round(avgScore),
+        topSkills,
+        totalScreened: results?.length || 0,
+      };
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useComplianceViolations = (timeRange: TimeRangeFilter, limit = 50) => {
+  const { start, end } = getDateRange(timeRange);
+
+  return useQuery({
+    queryKey: ['compliance-violations', timeRange, limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('compliance_decisions')
+        .select('id, flag_type, severity_level, status, description, created_at')
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+
+      return (data || []).map((v: any) => ({
+        id: v.id,
+        flagType: v.flag_type,
+        severity: v.severity_level as 'low' | 'medium' | 'high',
+        status: v.status as 'open' | 'reviewed' | 'escalated',
+        description: v.description,
+        createdAt: v.created_at,
+      }));
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useAuditLogs = (timeRange: TimeRangeFilter, searchTerm?: string, limit = 100) => {
+  const { start, end } = getDateRange(timeRange);
+
+  return useQuery({
+    queryKey: ['audit-logs', timeRange, searchTerm, limit],
+    queryFn: async () => {
+      let query = supabase
+        .from('audit_logs')
+        .select('id, event_type, user_id, payload, created_at')
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (searchTerm) {
+        query = query.ilike('event_type', `%${searchTerm}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return (data || []).map((log: any) => ({
+        id: log.id,
+        eventType: log.event_type,
+        userId: log.user_id,
+        payload: log.payload,
+        createdAt: log.created_at,
+      }));
+    },
+    refetchInterval: 30000,
+  });
+};

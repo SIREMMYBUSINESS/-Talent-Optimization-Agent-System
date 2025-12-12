@@ -28,10 +28,17 @@ import {
 } from '../hooks/useDashboardData';
 import { formatNumber } from '../utils/formatters';
 import { TimeRangeFilter } from '../types/dashboard';
+import { ScreeningTab } from './ScreeningTab';
+import { ComplianceTab } from './ComplianceTab';
+import { AnalyticsTab } from './AnalyticsTab';
+import { TalentIntelligenceTab } from './TalentIntelligenceTab';
+
+type TabType = 'overview' | 'screening' | 'compliance' | 'analytics' | 'talent';
 
 function Dashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [timeRange, setTimeRange] = useState<TimeRangeFilter>({ preset: '30d' });
   const [dpModalOpen, setDpModalOpen] = useState(false);
 
@@ -67,13 +74,41 @@ function Dashboard() {
     a.click();
   };
 
+  const tabConfig = [
+    { id: 'overview' as TabType, label: 'Overview' },
+    { id: 'screening' as TabType, label: 'Screening Performance' },
+    { id: 'compliance' as TabType, label: 'Compliance' },
+    { id: 'analytics' as TabType, label: 'Analytics' },
+    { id: 'talent' as TabType, label: 'Talent Intelligence' },
+  ];
+
   return (
     <DashboardLayout>
       <div className="space-y-6 pb-32">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
-          <TimeRangeSelector selectedRange={timeRange} onChange={setTimeRange} />
+        <div className="border-b border-gray-200 mb-6">
+          <div className="flex gap-1">
+            {tabConfig.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-700 hover:text-gray-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">Dashboard Overview</h2>
+              <TimeRangeSelector selectedRange={timeRange} onChange={setTimeRange} />
+            </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricsCard
@@ -192,20 +227,27 @@ function Dashboard() {
           </div>
         </div>
 
-        <QuickActionsBar
-          onViewFlaggedResumes={() => navigate('/applications?filter=flagged')}
-          onExportAuditReport={handleExportAuditReport}
-          onCompareDPModels={() => setDpModalOpen(true)}
-          onReviewOverrides={() => navigate('/applications?filter=overrides')}
-        />
+            <QuickActionsBar
+              onViewFlaggedResumes={() => navigate('/applications?filter=flagged')}
+              onExportAuditReport={handleExportAuditReport}
+              onCompareDPModels={() => setDpModalOpen(true)}
+              onReviewOverrides={() => navigate('/applications?filter=overrides')}
+            />
 
-        <DPComparisonModal
-          isOpen={dpModalOpen}
-          onClose={() => setDpModalOpen(false)}
-          comparisonData={dpComparison || []}
-          mechanismMetrics={dpMetrics || []}
-          isLoading={dpComparisonLoading}
-        />
+            <DPComparisonModal
+              isOpen={dpModalOpen}
+              onClose={() => setDpModalOpen(false)}
+              comparisonData={dpComparison || []}
+              mechanismMetrics={dpMetrics || []}
+              isLoading={dpComparisonLoading}
+            />
+          </div>
+        )}
+
+        {activeTab === 'screening' && <ScreeningTab />}
+        {activeTab === 'compliance' && <ComplianceTab />}
+        {activeTab === 'analytics' && <AnalyticsTab />}
+        {activeTab === 'talent' && <TalentIntelligenceTab />}
       </div>
     </DashboardLayout>
   );
