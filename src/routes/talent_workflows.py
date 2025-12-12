@@ -87,6 +87,15 @@ class ScreeningRequest(BaseModel):
     required_certifications: Optional[List[str]] = None
 
 
+class ManagerOverrideRequest(BaseModel):
+    override_recommendation: str = Field(
+        ...,
+        description="New recommendation: strong_match, good_match, potential_match, no_match"
+    )
+    override_reason: str = Field(..., min_length=10, max_length=1000)
+    supporting_notes: Optional[str] = None
+
+
 async def _save_upload_tmp(file: UploadFile) -> str:
     suffix = os.path.splitext(file.filename)[1] or ""
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
@@ -502,9 +511,21 @@ async def update_application(application_id: str, updates: ApplicationUpdate, us
         raise HTTPException(status_code=500, detail=f"Failed to update application: {str(exc)}")
 
 
-@router.post("/applications/{application_id}/screen", dependencies=[Depends(require_roles("admin", "hr_manager", "recruiter"))])
-async def screen_application(application_id: str, request: ScreeningRequest, user=Depends(get_current_user)):
-    """Run AI screening on an application"""
+@router.post("/applications/{application_id}/screen-with-privacy", dependencies=[Depends(require_roles("admin", "hr_manager", "recruiter"))])
+async def screen_application_with_privacy(
+    application_id: str,
+    request: ScreeningRequest,
+    evaluation_mode: bool = False,
+    user=Depends(get_current_user)
+):
+    """Run AI screening with Differential Privacy and Compliance Audit.
+
+    This endpoint performs privacy-preserving candidate screening with:
+    - Differential privacy noise applied to scores (always-on in production)
+    - Full compliance audit (GDPR, EEOC)
+    - Protected class indicator detection for bias analysis
+    - Structured audit logging for regulatory transparency
+    """
     try:
         supabase = get_supabase_client()
 
@@ -525,51 +546,87 @@ async def screen_application(application_id: str, request: ScreeningRequest, use
         resume_text = candidate["resume_text"]
         role_description = f"{job.get('title', '')} {job.get('description', '')}"
 
-        audit_report = await auditor.audit_resume(resume_text, required_certifications=request.required_certifications)
+        # Run comprehensive screening with DP and compliance
+        # Note: resume_text is stored, use temporary file approach or in-memory handling
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(resume_text)
+            tmp_path = f.name
 
-        skills_match = {
-            "candidate_skills": candidate.get("skills", []),
-            "required_skills": job.get("requirements", {}).get("skills", []),
-            "matched_count": 0
-        }
+        try:
+            screening_result = await screener.screen(
+                resume_path=tmp_path,
+                role_description=role_description,
+                required_certifications=request.required_certifications,
+                evaluation_mode=evaluation_mode
+            )
+        finally:
+            os.remove(tmp_path)
 
-        experience_match = {
-            "candidate_years": candidate.get("experience_years", 0),
-            "required_years": job.get("requirements", {}).get("experience_years", 0)
-        }
-
-        overall_score = min(100, int((len(skills_match["candidate_skills"]) / max(1, len(skills_match["required_skills"]))) * 100)) if skills_match["required_skills"] else 50
-
-        recommendation = "strong_match" if overall_score >= 80 else "good_match" if overall_score >= 60 else "potential_match" if overall_score >= 40 else "no_match"
-
+        # Store screening results with all DP and compliance metadata
         screening_data = {
             "application_id": application_id,
-            "overall_score": overall_score,
-            "skills_match": skills_match,
-            "experience_match": experience_match,
-            "education_match": {},
-            "ai_summary": audit_report.get("summary", ""),
-            "recommendation": recommendation,
-            "bias_flags": audit_report.get("bias_flags", []),
-            "screened_by_model": "nvidia-nemo",
+            "original_score": screening_result["original_score"],
+            "private_score": screening_result["private_score"],
+            "privacy_epsilon": screening_result["privacy_metadata"]["epsilon"],
+            "privacy_delta": screening_result["privacy_metadata"]["delta"],
+            "privacy_mechanism": screening_result["privacy_metadata"]["mechanism"],
+            "dp_noise_amount": screening_result["privacy_metadata"]["noise_amount"],
+            "compliance_score": screening_result["compliance"]["compliance_score"],
+            "compliance_risk_level": screening_result["compliance"]["risk_level"],
+            "compliance_findings": screening_result["compliance"]["decisions"],
+            "privacy_metadata": screening_result["privacy_metadata"],
+            "bias_analysis": screening_result["compliance"]["bias_analysis"],
+            "recommendation": screening_result["recommendation"],
+            "screened_by_model": "nvidia-nemo-with-dp",
+            "screening_mode": screening_result["screening_mode"],
             "screened_at": datetime.utcnow().isoformat()
         }
 
+        if evaluation_mode and "evaluation_comparison" in screening_result:
+            screening_data["evaluation_comparison_id"] = None
+
         result = supabase.table("screening_results").upsert(screening_data).execute()
 
-        supabase.table("applications").update({"status": "screening"}).eq("id", application_id).execute()
+        supabase.table("applications").update({"status": "review"}).eq("id", application_id).execute()
 
-        await audit_logger.log("application_screened", user.get("sub", "unknown"), application_id, {
-            "score": overall_score,
-            "recommendation": recommendation
-        })
+        # Store compliance decisions for audit trail
+        for decision in screening_result["compliance"]["decisions"]:
+            supabase.table("compliance_decisions").insert({
+                "application_id": application_id,
+                "framework": decision["framework"],
+                "decision_type": decision["decision_type"],
+                "passed": decision["passed"],
+                "severity": decision["severity"],
+                "data_fields_checked": decision["data_fields_checked"],
+                "explanation": decision["explanation"],
+                "rule_reference": decision.get("rule_reference"),
+            }).execute()
+
+        await audit_logger.log(
+            "application_screened_with_privacy",
+            user.get("sub", "unknown"),
+            application_id,
+            {
+                "original_score": screening_result["original_score"],
+                "private_score": screening_result["private_score"],
+                "recommendation": screening_result["recommendation"],
+                "compliance_passed": screening_result["compliance"]["overall_passed"],
+                "compliance_risk": screening_result["compliance"]["risk_level"],
+            },
+        )
 
         return result.data[0] if result.data else screening_data
 
     except HTTPException:
         raise
     except Exception as exc:
-        await audit_logger.log("screening_error", user.get("sub", "unknown"), application_id, {"error": str(exc)})
+        await audit_logger.log(
+            "screening_error",
+            user.get("sub", "unknown"),
+            application_id,
+            {"error": str(exc)},
+        )
         raise HTTPException(status_code=500, detail=f"Failed to screen application: {str(exc)}")
 
 
@@ -589,3 +646,118 @@ async def get_screening_results(application_id: str, user=Depends(get_current_us
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch screening results: {str(exc)}")
+
+
+@router.post("/screening-results/{screening_result_id}/manager-override", dependencies=[Depends(require_roles("admin", "hr_manager", "recruiter"))])
+async def manager_override_screening(
+    screening_result_id: str,
+    request: ManagerOverrideRequest,
+    user=Depends(get_current_user)
+):
+    """Manager override screening decision with automatic compliance audit.
+
+    This endpoint allows managers to override system recommendations with:
+    - Automatic compliance audit to detect high-risk overrides
+    - Escalation flagging for EEOC/GDPR review if needed
+    - Comprehensive audit trail for regulatory compliance
+    """
+    try:
+        supabase = get_supabase_client()
+
+        screening_result = supabase.table("screening_results").select(
+            "*, applications(id, candidate_id, job_posting_id)"
+        ).eq("id", screening_result_id).maybeSingle().execute()
+
+        if not screening_result.data:
+            raise HTTPException(status_code=404, detail="Screening result not found")
+
+        screening = screening_result.data
+        original_recommendation = screening.get("recommendation")
+
+        # Extract compliance decisions from screening result
+        compliance_findings_raw = screening.get("compliance_findings", [])
+
+        # Convert compliance findings back to ComplianceDecision objects for audit
+        from src.agents.compliance_auditor import ComplianceDecision
+        compliance_decisions = [
+            ComplianceDecision(
+                framework=d.get("framework"),
+                decision_type=d.get("decision_type"),
+                passed=d.get("passed"),
+                severity=d.get("severity"),
+                data_fields_checked=d.get("data_fields_checked", []),
+                explanation=d.get("explanation"),
+                rule_reference=d.get("rule_reference")
+            )
+            for d in compliance_findings_raw
+        ]
+
+        # Run override audit through compliance auditor
+        override_audit_result = await auditor.audit_override(
+            original_recommendation=original_recommendation,
+            override_recommendation=request.override_recommendation,
+            override_reason=request.override_reason,
+            compliance_findings=compliance_decisions,
+        )
+
+        # Store override decision in database
+        override_data = {
+            "screening_result_id": screening_result_id,
+            "manager_id": user.get("sub"),
+            "original_recommendation": original_recommendation,
+            "override_recommendation": request.override_recommendation,
+            "override_reason": request.override_reason,
+            "compliance_audit_triggered": True,
+            "escalation_required": override_audit_result.escalation_required,
+            "escalation_reason": override_audit_result.escalation_reason,
+        }
+
+        override_result = supabase.table("manager_overrides").insert(override_data).execute()
+
+        # Log override action
+        await audit_logger.log(
+            "manager_override_created",
+            user.get("sub", "unknown"),
+            screening_result_id,
+            {
+                "original_recommendation": original_recommendation,
+                "override_recommendation": request.override_recommendation,
+                "escalation_required": override_audit_result.escalation_required,
+                "escalation_reason": override_audit_result.escalation_reason,
+            },
+        )
+
+        # If escalation required, notify admin
+        if override_audit_result.escalation_required:
+            await audit_logger.log(
+                "compliance_escalation_created",
+                "system",
+                screening_result_id,
+                {
+                    "escalation_reason": override_audit_result.escalation_reason,
+                    "manager_id": user.get("sub"),
+                    "requires_review": True,
+                },
+            )
+
+        response = {
+            "override_id": override_result.data[0]["id"] if override_result.data else None,
+            "original_recommendation": original_recommendation,
+            "override_recommendation": request.override_recommendation,
+            "escalation_required": override_audit_result.escalation_required,
+            "escalation_reason": override_audit_result.escalation_reason,
+            "compliance_notes": override_audit_result.compliance_notes,
+        }
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        await audit_logger.log(
+            "manager_override_error",
+            user.get("sub", "unknown"),
+            screening_result_id,
+            {"error": str(exc)},
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to process override: {str(exc)}")
