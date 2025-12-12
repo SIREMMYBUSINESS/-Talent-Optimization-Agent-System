@@ -67,3 +67,37 @@ export interface DashboardFilters {
   department?: string;
   status?: string;
 }
+
+export type TimeRangePreset = '7d' | '30d' | '90d' | 'custom';
+
+export interface TimeRangeFilter {
+  preset: TimeRangePreset;
+  customStart?: Date;
+  customEnd?: Date;
+}
+
+export interface ComplianceAlert {
+  id: string;
+  flagType: string;
+  severity: 'low' | 'medium' | 'high';
+  status: 'open' | 'reviewed' | 'escalated';
+  affectedCandidateCount: number;
+  description: string;
+  timestamp: string;
+  actionable: boolean;
+}
+
+export interface DPMechanismMetrics {
+  mechanism: 'laplace' | 'gaussian';
+  sampleCount: number;
+  epsilonBudget: number;
+  averageNoiseScale: number;
+  confidenceIntervalWidth: number;
+}
+
+export interface DPComparison {
+  originalScore: number;
+  privacyProtectedScore: number;
+  accuracyDelta: number;
+  candidateName: string;
+}
