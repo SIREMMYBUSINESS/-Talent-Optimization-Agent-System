@@ -99,18 +99,18 @@ export function ApprovalWorkflow({
       </div>
 
       {displaySteps.some((s) => s.status === 'current') && (
-        <div className="mt-6 pt-6 border-t border-gray-200 flex gap-3">
+        <div className="mt-6 pt-6 border-t border-gray-200 flex flex-col sm:flex-row gap-3">
           <button
             onClick={onApprove}
             disabled={isLoading}
-            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+            className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-center"
           >
             {isLoading ? 'Processing...' : 'Approve'}
           </button>
           <button
             onClick={onEscalate}
             disabled={isLoading}
-            className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
+            className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors text-center"
           >
             {isLoading ? 'Processing...' : 'Escalate to Compliance'}
           </button>
