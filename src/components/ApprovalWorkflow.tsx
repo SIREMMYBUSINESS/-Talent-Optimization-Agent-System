@@ -50,7 +50,7 @@ export function ApprovalWorkflow({
   const displaySteps = steps || defaultSteps;
 
   return (
-    <div className="@container bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-6">Manager Override Approval Workflow</h3>
 
       <div className="space-y-4">
@@ -99,18 +99,18 @@ export function ApprovalWorkflow({
       </div>
 
       {displaySteps.some((s) => s.status === 'current') && (
-        <div className="mt-6 pt-6 border-t border-gray-200 flex flex-col @sm:flex-row gap-3">
+        <div className="mt-6 pt-6 border-t border-gray-200 flex flex-col gap-3">
           <button
             onClick={onApprove}
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-center"
+            className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-center"
           >
             {isLoading ? 'Processing...' : 'Approve'}
           </button>
           <button
             onClick={onEscalate}
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors text-center"
+            className="w-full px-4 py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors text-center"
           >
             {isLoading ? 'Processing...' : 'Escalate to Compliance'}
           </button>
