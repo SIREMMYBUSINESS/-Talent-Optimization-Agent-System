@@ -6,6 +6,7 @@ import JobDetails from './pages/JobDetails';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import { TalentWorkflows } from './pages/TalentWorkflows';
+import { Applications } from './pages/Applications';
 import { useAuthStore } from './store/authStore';
 import { queryClient } from './lib/queryClient';
 
@@ -23,6 +24,7 @@ export function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/workflows" element={<TalentWorkflows />} />
+        <Route path="/applications" element={<Applications />} />
         <Route path="/jobs/:jobId" element={<JobDetails />} />
       </Routes>
     </QueryClientProvider>
