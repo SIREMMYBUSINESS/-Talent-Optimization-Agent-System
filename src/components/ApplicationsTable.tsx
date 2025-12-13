@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { talentService, Application } from '../services/talent.service';
+import { useApplications, useApplicationActions } from '../hooks/useDashboardData';
 import { LoadingSpinner } from './LoadingSpinner';
 import { EmptyState } from './EmptyState';
+import { ApplicationDetailModal } from './ApplicationDetailModal';
+import { ComplianceFlagModal } from './ComplianceFlagModal';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ApplicationsTableProps {
@@ -14,10 +15,11 @@ interface ApplicationsTableProps {
 
 const STATUS_COLORS: Record<string, string> = {
   submitted: 'bg-blue-100 text-blue-800',
-  screening: 'bg-yellow-100 text-yellow-800',
-  review: 'bg-purple-100 text-purple-800',
-  interview: 'bg-indigo-100 text-indigo-800',
-  offer: 'bg-green-100 text-green-800',
+  screening_submitted: 'bg-blue-100 text-blue-800',
+  screening_reviewed: 'bg-yellow-100 text-yellow-800',
+  review: 'bg-orange-100 text-orange-800',
+  interview_scheduled: 'bg-indigo-100 text-indigo-800',
+  offer_extended: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
   withdrawn: 'bg-gray-100 text-gray-800',
   hired: 'bg-emerald-100 text-emerald-800',
@@ -25,38 +27,38 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnly }: ApplicationsTableProps) {
   const [page, setPage] = useState(0);
-  const [selectedApp, setSelectedApp] = useState<string | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [flagModalOpen, setFlagModalOpen] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
   const limit = 20;
-  const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['applications', page, jobId, candidateId, statusFilter, flaggedOnly],
-    queryFn: () =>
-      talentService.listApplications({
-        limit,
-        offset: page * limit,
-        job_id: jobId,
-        candidate_id: candidateId,
-        status: statusFilter,
-        flagged: flaggedOnly,
-      }),
+  const { data, isLoading, error } = useApplications({
+    limit,
+    offset: page * limit,
+    job_id: jobId,
+    candidate_id: candidateId,
+    status: statusFilter,
+    flagged: flaggedOnly,
   });
 
-  const screenMutation = useMutation({
-    mutationFn: (applicationId: string) =>
-      talentService.screenApplication(applicationId, { application_id: applicationId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['applications'] });
-    },
-  });
+  const { updateStatus } = useApplicationActions();
 
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      talentService.updateApplication(id, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['applications'] });
-    },
-  });
+  const openDetailModal = (application: any) => {
+    setSelectedApplication(application);
+    setDetailModalOpen(true);
+  };
+
+  const openFlagModal = (application: any) => {
+    setSelectedApplication(application);
+    setFlagModalOpen(true);
+  };
+
+  const handleStatusChange = (status: string) => {
+    if (selectedApplication) {
+      updateStatus.mutate({ id: selectedApplication.id, status });
+      setDetailModalOpen(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -74,7 +76,7 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
     );
   }
 
-  if (!data?.items.length) {
+  if (!data || data.items.length === 0) {
     return <EmptyState message="No applications found" />;
   }
 
@@ -106,7 +108,11 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {data.items.map((application) => (
-              <tr key={application.id} className="hover:bg-gray-50">
+              <tr
+                key={application.id}
+                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                onClick={() => openDetailModal(application)}
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
                     {application.candidates?.full_name || 'Unknown'}
@@ -132,12 +138,15 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
                     {application.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                   {application.flagged ? (
                     <div className="flex flex-col gap-1">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      <button
+                        onClick={() => openFlagModal(application)}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-colors cursor-pointer"
+                      >
                         Flagged
-                      </span>
+                      </button>
                       {application.compliance_flags && application.compliance_flags.length > 0 && (
                         <div className="text-xs text-gray-600">
                           {application.compliance_flags.map((flag, idx) => (
@@ -160,28 +169,24 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {formatDistanceToNow(new Date(application.applied_at), { addSuffix: true })}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  {application.status === 'submitted' && (
-                    <button
-                      onClick={() => screenMutation.mutate(application.id)}
-                      disabled={screenMutation.isPending}
-                      className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
-                    >
-                      Screen
-                    </button>
-                  )}
+                <td
+                  className="px-6 py-4 whitespace-nowrap text-sm font-medium"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <select
                     value={application.status}
                     onChange={(e) =>
-                      updateStatusMutation.mutate({ id: application.id, status: e.target.value })
+                      updateStatus.mutate({ id: application.id, status: e.target.value })
                     }
-                    className="text-sm border-gray-300 rounded-md"
+                    disabled={updateStatus.isPending}
+                    className="text-sm border border-gray-300 rounded-md px-2 py-1 disabled:opacity-50"
                   >
                     <option value="submitted">Submitted</option>
-                    <option value="screening">Screening</option>
+                    <option value="screening_submitted">Screening Submitted</option>
+                    <option value="screening_reviewed">Screening Reviewed</option>
                     <option value="review">Review</option>
-                    <option value="interview">Interview</option>
-                    <option value="offer">Offer</option>
+                    <option value="interview_scheduled">Interview Scheduled</option>
+                    <option value="offer_extended">Offer Extended</option>
                     <option value="rejected">Rejected</option>
                     <option value="withdrawn">Withdrawn</option>
                     <option value="hired">Hired</option>
@@ -204,7 +209,7 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
           </button>
           <button
             onClick={() => setPage((p) => p + 1)}
-            disabled={data.items.length < limit}
+            disabled={(data?.items?.length || 0) < limit}
             className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             Next
@@ -214,7 +219,8 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
           <div>
             <p className="text-sm text-gray-700">
               Showing <span className="font-medium">{page * limit + 1}</span> to{' '}
-              <span className="font-medium">{page * limit + data.items.length}</span>
+              <span className="font-medium">{page * limit + (data?.items?.length || 0)}</span> of{' '}
+              <span className="font-medium">{data?.total || 0}</span>
             </p>
           </div>
           <div>
@@ -228,7 +234,7 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
               </button>
               <button
                 onClick={() => setPage((p) => p + 1)}
-                disabled={data.items.length < limit}
+                disabled={(data?.items?.length || 0) < limit}
                 className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
               >
                 Next
@@ -237,6 +243,37 @@ export function ApplicationsTable({ jobId, candidateId, statusFilter, flaggedOnl
           </div>
         </div>
       </div>
+
+      {selectedApplication && (
+        <>
+          <ApplicationDetailModal
+            isOpen={detailModalOpen}
+            onClose={() => setDetailModalOpen(false)}
+            candidate={{
+              id: selectedApplication.candidates?.id || '',
+              fullName: selectedApplication.candidates?.full_name || 'Unknown',
+              email: selectedApplication.candidates?.email || '',
+              skills: [],
+            }}
+            jobTitle={selectedApplication.job_postings?.title || 'Unknown'}
+            status={selectedApplication.status}
+            appliedAt={selectedApplication.applied_at}
+            notes={selectedApplication.notes}
+            onStatusChange={handleStatusChange}
+            isLoading={updateStatus.isPending}
+          />
+
+          <ComplianceFlagModal
+            isOpen={flagModalOpen}
+            onClose={() => setFlagModalOpen(false)}
+            applicationId={selectedApplication.id}
+            candidateName={selectedApplication.candidates?.full_name || 'Unknown'}
+            jobTitle={selectedApplication.job_postings?.title || 'Unknown'}
+            flags={selectedApplication.compliance_flags || []}
+            flaggedAt={selectedApplication.applied_at}
+          />
+        </>
+      )}
     </div>
   );
 }

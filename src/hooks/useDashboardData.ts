@@ -614,3 +614,129 @@ export const useAuditLogs = (timeRange: TimeRangeFilter, searchTerm?: string, li
     refetchInterval: 30000,
   });
 };
+
+interface ApplicationFilters {
+  limit?: number;
+  offset?: number;
+  job_id?: string;
+  candidate_id?: string;
+  status?: string;
+  flagged?: boolean;
+}
+
+interface ApplicationWithRelations {
+  id: string;
+  status: string;
+  applied_at: string;
+  flagged: boolean;
+  notes?: string;
+  candidates?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+  job_postings?: {
+    id: string;
+    title: string;
+    department: string;
+  };
+  screening_results?: {
+    id: string;
+    overall_score: number;
+    recommendation: string;
+  }[];
+  compliance_flags?: Array<{
+    type: string;
+    severity: 'low' | 'medium' | 'high';
+  }>;
+}
+
+export const useApplications = (filters: ApplicationFilters) => {
+  return useQuery({
+    queryKey: ['applications', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('applications')
+        .select(`
+          id,
+          status,
+          applied_at,
+          flagged,
+          notes,
+          candidates (id, full_name, email),
+          job_postings (id, title, department),
+          screening_results (id, overall_score, recommendation)
+        `)
+        .order('applied_at', { ascending: false });
+
+      if (filters.job_id) {
+        query = query.eq('job_posting_id', filters.job_id);
+      }
+      if (filters.candidate_id) {
+        query = query.eq('candidate_id', filters.candidate_id);
+      }
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+      if (filters.flagged) {
+        query = query.eq('flagged', true);
+      }
+
+      if (filters.offset) {
+        query = query.range(filters.offset, (filters.offset || 0) + (filters.limit || 20) - 1);
+      } else if (filters.limit) {
+        query = query.limit(filters.limit);
+      }
+
+      const { data, error, count } = await query;
+      if (error) throw error;
+
+      return {
+        items: (data || []) as ApplicationWithRelations[],
+        total: count || 0,
+      };
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useApplicationActions = () => {
+  const queryClient = useQueryClient();
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase
+        .from('applications')
+        .update({ status })
+        .eq('id', id);
+
+      if (error) throw error;
+      return { id, status };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+    },
+  });
+
+  const toggleFlag = useMutation({
+    mutationFn: async ({ id, flagged }: { id: string; flagged: boolean }) => {
+      const { error } = await supabase
+        .from('applications')
+        .update({ flagged })
+        .eq('id', id);
+
+      if (error) throw error;
+      return { id, flagged };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications'] });
+    },
+  });
+
+  return {
+    updateStatus,
+    toggleFlag,
+    isLoading: updateStatus.isPending || toggleFlag.isPending,
+    isError: updateStatus.isError || toggleFlag.isError,
+  };
+};

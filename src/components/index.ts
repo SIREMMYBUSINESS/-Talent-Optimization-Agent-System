@@ -16,6 +16,8 @@ export { ComplianceFlagsCard } from './ComplianceFlagsCard';
 export { OverrideDecisionsCard } from './OverrideDecisionsCard';
 export { ComplianceAlertsPanel } from './ComplianceAlertsPanel';
 export { DPComparisonModal } from './DPComparisonModal';
+export { ComplianceFlagModal } from './ComplianceFlagModal';
+export { ApplicationDetailModal } from './ApplicationDetailModal';
 export { QuickActionsBar } from './QuickActionsBar';
 
 export { StatusBadge } from './StatusBadge';
