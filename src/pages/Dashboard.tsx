@@ -18,7 +18,6 @@ import {
 import {
   useDashboardMetrics,
   useCandidatePipeline,
-  useJobPostings,
   useScreeningResults,
   useComplianceAlerts,
   useDPMetricsDetailed,
@@ -29,13 +28,10 @@ import { formatNumber } from '../utils/formatters';
 import { TimeRangeFilter } from '../types/dashboard';
 import { ScreeningTab } from './ScreeningTab';
 import { ComplianceTab } from './ComplianceTab';
-import { AnalyticsTab } from './AnalyticsTab';
-import { TalentIntelligenceTab } from './TalentIntelligenceTab';
 import { CandidatesTab } from './CandidatesTab';
 import { JobsTab } from './JobsTab';
 
-function Dashboard() {
-  const { user } = useAuthStore();
+function DashboardContent() {
   const navigate = useNavigate();
   const { activeTab } = useDashboardTab();
   const [timeRange, setTimeRange] = useState<TimeRangeFilter>({ preset: '30d' });
@@ -43,21 +39,12 @@ function Dashboard() {
 
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
   const { data: pipeline, isLoading: pipelineLoading } = useCandidatePipeline();
-  const { data: jobs, isLoading: jobsLoading } = useJobPostings();
   const { data: screeningResults, isLoading: screeningLoading } = useScreeningResults(10);
 
   const { data: alerts, isLoading: alertsLoading } = useComplianceAlerts(timeRange, 6);
   const { data: dpMetrics, isLoading: dpMetricsLoading } = useDPMetricsDetailed(timeRange);
-  const { data: overrideMetrics, isLoading: overrideMetricsLoading } = useOverrideMetrics(timeRange);
+  const { data: overrideMetrics } = useOverrideMetrics(timeRange);
   const { data: dpComparison, isLoading: dpComparisonLoading } = useDPVsNonDPComparison(timeRange, 25);
-
-  useEffect(() => {
-    if (!user) {
-      navigate('/');
-    }
-  }, [user, navigate]);
-
-  if (!user) return null;
 
   const timeRangeLabel = timeRange.preset === 'custom'
     ? 'Custom'
@@ -74,8 +61,7 @@ function Dashboard() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6 pb-32">
+    <div className="space-y-6 pb-32">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -216,11 +202,29 @@ function Dashboard() {
           </div>
         )}
 
-        {activeTab === 'candidates' && <CandidatesTab />}
-        {activeTab === 'jobs' && <JobsTab />}
-        {activeTab === 'screening' && <ScreeningTab />}
-        {activeTab === 'compliance' && <ComplianceTab />}
-      </div>
+      {activeTab === 'candidates' && <CandidatesTab />}
+      {activeTab === 'jobs' && <JobsTab />}
+      {activeTab === 'screening' && <ScreeningTab />}
+      {activeTab === 'compliance' && <ComplianceTab />}
+    </div>
+  );
+}
+
+function Dashboard() {
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
+  if (!user) return null;
+
+  return (
+    <DashboardLayout>
+      <DashboardContent />
     </DashboardLayout>
   );
 }
