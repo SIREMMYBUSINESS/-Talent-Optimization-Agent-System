@@ -1,9 +1,24 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 interface DashboardLayoutProps {
   children: ReactNode;
+}
+
+interface DashboardContextType {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+}
+
+const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
+
+export function useDashboardTab() {
+  const context = useContext(DashboardContext);
+  if (!context) {
+    throw new Error('useDashboardTab must be used within DashboardLayout');
+  }
+  return context;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -67,7 +82,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </nav>
         </div>
 
-        {children}
+        <DashboardContext.Provider value={{ activeTab, setActiveTab }}>
+          {children}
+        </DashboardContext.Provider>
       </div>
     </div>
   );

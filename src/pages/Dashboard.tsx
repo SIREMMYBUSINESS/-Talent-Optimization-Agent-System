@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { DashboardLayout } from '../layouts/DashboardLayout';
+import { DashboardLayout, useDashboardTab } from '../layouts/DashboardLayout';
 import {
   MetricsCard,
   PipelineChart,
-  JobPostingsTable,
   ScreeningInsights,
   AuditLogStream,
   TimeRangeSelector,
@@ -32,13 +31,13 @@ import { ScreeningTab } from './ScreeningTab';
 import { ComplianceTab } from './ComplianceTab';
 import { AnalyticsTab } from './AnalyticsTab';
 import { TalentIntelligenceTab } from './TalentIntelligenceTab';
-
-type TabType = 'overview' | 'screening' | 'compliance' | 'analytics' | 'talent';
+import { CandidatesTab } from './CandidatesTab';
+import { JobsTab } from './JobsTab';
 
 function Dashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const { activeTab } = useDashboardTab();
   const [timeRange, setTimeRange] = useState<TimeRangeFilter>({ preset: '30d' });
   const [dpModalOpen, setDpModalOpen] = useState(false);
 
@@ -74,35 +73,9 @@ function Dashboard() {
     a.click();
   };
 
-  const tabConfig = [
-    { id: 'overview' as TabType, label: 'Overview' },
-    { id: 'screening' as TabType, label: 'Screening Performance' },
-    { id: 'compliance' as TabType, label: 'Compliance' },
-    { id: 'analytics' as TabType, label: 'Analytics' },
-    { id: 'talent' as TabType, label: 'Talent Intelligence' },
-  ];
-
   return (
     <DashboardLayout>
       <div className="space-y-6 pb-32">
-        <div className="border-b border-gray-200 mb-6">
-          <div className="flex gap-1">
-            {tabConfig.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-700 hover:text-gray-900'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -187,7 +160,6 @@ function Dashboard() {
           <div className="lg:col-span-2">
             <div className="grid grid-cols-1 gap-6">
               {!pipelineLoading && pipeline && <PipelineChart data={pipeline} />}
-              {!jobsLoading && jobs && <JobPostingsTable jobs={jobs} />}
             </div>
           </div>
           <div className="space-y-6">
@@ -244,10 +216,10 @@ function Dashboard() {
           </div>
         )}
 
+        {activeTab === 'candidates' && <CandidatesTab />}
+        {activeTab === 'jobs' && <JobsTab />}
         {activeTab === 'screening' && <ScreeningTab />}
         {activeTab === 'compliance' && <ComplianceTab />}
-        {activeTab === 'analytics' && <AnalyticsTab />}
-        {activeTab === 'talent' && <TalentIntelligenceTab />}
       </div>
     </DashboardLayout>
   );

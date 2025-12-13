@@ -740,3 +740,250 @@ export const useApplicationActions = () => {
     isError: updateStatus.isError || toggleFlag.isError,
   };
 };
+
+interface CandidateFilters {
+  page?: number;
+  limit?: number;
+  skills?: string[];
+  experienceMin?: number;
+  experienceMax?: number;
+  search?: string;
+}
+
+export const useCandidates = (filters: CandidateFilters = {}) => {
+  const { page = 0, limit = 20, skills, experienceMin, experienceMax, search } = filters;
+
+  return useQuery({
+    queryKey: ['candidates', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('candidates')
+        .select(`
+          id,
+          full_name,
+          email,
+          phone,
+          resume_url,
+          linkedin_url,
+          skills,
+          experience_years,
+          source,
+          created_at
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1);
+
+      if (search) {
+        query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      }
+
+      if (experienceMin !== undefined) {
+        query = query.gte('experience_years', experienceMin);
+      }
+
+      if (experienceMax !== undefined) {
+        query = query.lte('experience_years', experienceMax);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      let filtered = data || [];
+
+      if (skills && skills.length > 0) {
+        filtered = filtered.filter((candidate: any) => {
+          const candidateSkills = candidate.skills || [];
+          return skills.some((skill) =>
+            candidateSkills.some((cs: string) =>
+              cs.toLowerCase().includes(skill.toLowerCase())
+            )
+          );
+        });
+      }
+
+      return {
+        items: filtered.map((candidate: any) => ({
+          id: candidate.id,
+          fullName: candidate.full_name,
+          email: candidate.email,
+          phone: candidate.phone,
+          resumeUrl: candidate.resume_url,
+          linkedinUrl: candidate.linkedin_url,
+          skills: candidate.skills || [],
+          experienceYears: candidate.experience_years || 0,
+          source: candidate.source,
+          createdAt: candidate.created_at,
+        })),
+        total: count || 0,
+        page,
+        limit,
+      };
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useCandidate = (candidateId: string | null) => {
+  return useQuery({
+    queryKey: ['candidate', candidateId],
+    queryFn: async () => {
+      if (!candidateId) throw new Error('Candidate ID required');
+
+      const { data: candidate, error: candidateError } = await supabase
+        .from('candidates')
+        .select('*')
+        .eq('id', candidateId)
+        .maybeSingle();
+
+      if (candidateError) throw candidateError;
+      if (!candidate) throw new Error('Candidate not found');
+
+      const { data: applications, error: applicationsError } = await supabase
+        .from('applications')
+        .select(`
+          id,
+          status,
+          applied_at,
+          notes,
+          job_postings (
+            id,
+            title,
+            department,
+            location
+          ),
+          screening_results (
+            id,
+            overall_score,
+            recommendation,
+            skills_match,
+            bias_flags,
+            screened_at
+          )
+        `)
+        .eq('candidate_id', candidateId)
+        .order('applied_at', { ascending: false });
+
+      if (applicationsError) throw applicationsError;
+
+      return {
+        id: candidate.id,
+        fullName: candidate.full_name,
+        email: candidate.email,
+        phone: candidate.phone,
+        resumeUrl: candidate.resume_url,
+        resumeText: candidate.resume_text,
+        linkedinUrl: candidate.linkedin_url,
+        skills: candidate.skills || [],
+        experienceYears: candidate.experience_years || 0,
+        education: candidate.education || [],
+        source: candidate.source,
+        createdAt: candidate.created_at,
+        updatedAt: candidate.updated_at,
+        applications: applications?.map((app: any) => ({
+          id: app.id,
+          status: app.status,
+          appliedAt: app.applied_at,
+          notes: app.notes,
+          job: {
+            id: app.job_postings?.id,
+            title: app.job_postings?.title,
+            department: app.job_postings?.department,
+            location: app.job_postings?.location,
+          },
+          screening: app.screening_results ? {
+            id: app.screening_results.id,
+            overallScore: app.screening_results.overall_score,
+            recommendation: app.screening_results.recommendation,
+            skillsMatch: app.screening_results.skills_match,
+            biasFlags: app.screening_results.bias_flags || [],
+            screenedAt: app.screening_results.screened_at,
+          } : null,
+        })) || [],
+      };
+    },
+    enabled: !!candidateId,
+    refetchInterval: 30000,
+  });
+};
+
+interface JobFilters {
+  page?: number;
+  limit?: number;
+  department?: string;
+  status?: string;
+  search?: string;
+}
+
+export const useAllJobPostings = (filters: JobFilters = {}) => {
+  const { page = 0, limit = 20, department, status, search } = filters;
+
+  return useQuery({
+    queryKey: ['all-job-postings', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('job_postings')
+        .select(`
+          id,
+          title,
+          description,
+          department,
+          location,
+          employment_type,
+          status,
+          salary_range,
+          created_at,
+          updated_at
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1);
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+      }
+
+      if (department) {
+        query = query.eq('department', department);
+      }
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      const jobsWithApplicants = await Promise.all(
+        (data || []).map(async (job: any) => {
+          const { count: applicantCount } = await supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('job_posting_id', job.id);
+
+          return {
+            id: job.id,
+            title: job.title,
+            description: job.description,
+            department: job.department,
+            location: job.location,
+            employmentType: job.employment_type,
+            status: job.status,
+            salaryRange: job.salary_range || {},
+            applicantCount: applicantCount || 0,
+            createdAt: job.created_at,
+            updatedAt: job.updated_at,
+          };
+        })
+      );
+
+      return {
+        items: jobsWithApplicants,
+        total: count || 0,
+        page,
+        limit,
+      };
+    },
+    refetchInterval: 30000,
+  });
+};

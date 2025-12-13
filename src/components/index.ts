@@ -18,6 +18,8 @@ export { ComplianceAlertsPanel } from './ComplianceAlertsPanel';
 export { DPComparisonModal } from './DPComparisonModal';
 export { ComplianceFlagModal } from './ComplianceFlagModal';
 export { ApplicationDetailModal } from './ApplicationDetailModal';
+export { CandidateDetailModal } from './CandidateDetailModal';
+export { JobDetailModal } from './JobDetailModal';
 export { QuickActionsBar } from './QuickActionsBar';
 
 export { StatusBadge } from './StatusBadge';
