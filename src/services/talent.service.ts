@@ -41,6 +41,14 @@ export interface Application {
   reviewed_at?: string;
   reviewed_by?: string;
   notes?: string;
+  flagged?: boolean;
+  compliance_flags?: {
+    type: string;
+    severity: 'low' | 'medium' | 'high';
+    reason: string;
+    flagged_at?: string;
+    flagged_by?: string;
+  }[];
   created_at: string;
   updated_at: string;
   job_postings?: JobPosting;
@@ -175,6 +183,7 @@ class TalentService {
     status?: string;
     job_id?: string;
     candidate_id?: string;
+    flagged?: boolean;
   }): Promise<PaginatedResponse<Application>> {
     return apiService.get<PaginatedResponse<Application>>('/api/v1/applications', {
       params,
